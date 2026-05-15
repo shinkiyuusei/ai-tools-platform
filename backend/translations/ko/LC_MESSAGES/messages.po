@@ -1,0 +1,155 @@
+# Korean translations for AI Tools Platform
+# Copyright (C) 2026
+msgid ""
+msgstr ""
+"Project-Id-Version: AI Tools Platform\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-05-05 00:00+0800\n"
+"PO-Revision-Date: 2026-05-05 00:00+0800\n"
+"Last-Translator: \n"
+"Language: ko\n"
+"Language-Team: Korean\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# Common messages
+msgid "success"
+msgstr "성공"
+
+msgid "error"
+msgstr "오류"
+
+msgid "invalid_parameter"
+msgstr "잘못된 매개변수"
+
+msgid "unauthorized"
+msgstr "인증되지 않음"
+
+msgid "forbidden"
+msgstr "접근 금지"
+
+msgid "not_found"
+msgstr "리소스를 찾을 수 없음"
+
+msgid "server_error"
+msgstr "서버 오류"
+
+# User messages
+msgid "user_not_found"
+msgstr "사용자를 찾을 수 없음"
+
+msgid "user_exists"
+msgstr "사용자가 이미 존재함"
+
+msgid "login_success"
+msgstr "로그인 성공"
+
+msgid "login_failed"
+msgstr "로그인 실패"
+
+msgid "register_success"
+msgstr "회원가입 성공"
+
+msgid "register_failed"
+msgstr "회원가입 실패"
+
+# Tool messages
+msgid "tool_not_found"
+msgstr "도구를 찾을 수 없거나 삭제됨"
+
+msgid "tool_list_success"
+msgstr "도구 목록 가져오기 성공"
+
+msgid "tool_collect_success"
+msgstr "컬렉션에 추가됨"
+
+msgid "tool_collect_cancel"
+msgstr "컬렉션에서 제거됨"
+
+# Category messages
+msgid "category_love"
+msgstr "연애"
+
+msgid "category_character"
+msgstr "캐릭터"
+
+msgid "category_plot"
+msgstr "스토리"
+
+msgid "category_fantasy"
+msgstr "판타지"
+
+msgid "category_daily"
+msgstr "일상"
+
+# Discovery messages
+msgid "recommend_rank"
+msgstr "추천"
+
+msgid "category_section"
+msgstr "카테고리"
+
+msgid "chat_section"
+msgstr "채팅"
+
+msgid "recent_publish"
+msgstr "최근 게시"
+
+msgid "daily_rank"
+msgstr "일일 랭킹"
+
+msgid "weekly_rank"
+msgstr "주간 랭킹"
+
+msgid "monthly_rank"
+msgstr "월간 랭킹"
+
+msgid "total_rank"
+msgstr "전체 랭킹"
+
+# Search messages
+msgid "search_placeholder"
+msgstr "스토리, 캐릭터, 크리에이터 검색…"
+
+msgid "advanced_search"
+msgstr "고급"
+
+msgid "random"
+msgstr "무작위"
+
+# Filter messages
+msgid "filter_all"
+msgstr "전체"
+
+msgid "filter_hot"
+msgstr "인기순"
+
+msgid "filter_new"
+msgstr "최신순"
+
+# Content messages
+msgid "content_works"
+msgstr "작품"
+
+msgid "content_character_cards"
+msgstr "캐릭터 카드"
+
+msgid "platform_created"
+msgstr "플랫폼 생성"
+
+msgid "free"
+msgstr "무료"
+
+msgid "vip"
+msgstr "VIP"
+
+msgid "updated"
+msgstr "업데이트됨"
+
+# Empty state messages
+msgid "empty_content"
+msgstr "콘텐츠가 없습니다"
+
+msgid "empty_hint"
+msgstr "필터나 검색 키워드를 변경해보세요"

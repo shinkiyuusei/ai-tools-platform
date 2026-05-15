@@ -1,0 +1,155 @@
+# English translations for AI Tools Platform
+# Copyright (C) 2026
+msgid ""
+msgstr ""
+"Project-Id-Version: AI Tools Platform\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-05-05 00:00+0800\n"
+"PO-Revision-Date: 2026-05-05 00:00+0800\n"
+"Last-Translator: \n"
+"Language: en\n"
+"Language-Team: English\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# Common messages
+msgid "success"
+msgstr "Success"
+
+msgid "error"
+msgstr "Error"
+
+msgid "invalid_parameter"
+msgstr "Invalid parameter"
+
+msgid "unauthorized"
+msgstr "Unauthorized"
+
+msgid "forbidden"
+msgstr "Forbidden"
+
+msgid "not_found"
+msgstr "Resource not found"
+
+msgid "server_error"
+msgstr "Server error"
+
+# User messages
+msgid "user_not_found"
+msgstr "User not found"
+
+msgid "user_exists"
+msgstr "User already exists"
+
+msgid "login_success"
+msgstr "Login successful"
+
+msgid "login_failed"
+msgstr "Login failed"
+
+msgid "register_success"
+msgstr "Registration successful"
+
+msgid "register_failed"
+msgstr "Registration failed"
+
+# Tool messages
+msgid "tool_not_found"
+msgstr "Tool not found or has been removed"
+
+msgid "tool_list_success"
+msgstr "Tool list retrieved successfully"
+
+msgid "tool_collect_success"
+msgstr "Collection successful"
+
+msgid "tool_collect_cancel"
+msgstr "Collection cancelled"
+
+# Category messages
+msgid "category_love"
+msgstr "Romance"
+
+msgid "category_character"
+msgstr "Character"
+
+msgid "category_plot"
+msgstr "Plot"
+
+msgid "category_fantasy"
+msgstr "Fantasy"
+
+msgid "category_daily"
+msgstr "Daily Life"
+
+# Discovery messages
+msgid "recommend_rank"
+msgstr "Recommended"
+
+msgid "category_section"
+msgstr "Categories"
+
+msgid "chat_section"
+msgstr "Chat"
+
+msgid "recent_publish"
+msgstr "Recently Published"
+
+msgid "daily_rank"
+msgstr "Daily Rank"
+
+msgid "weekly_rank"
+msgstr "Weekly Rank"
+
+msgid "monthly_rank"
+msgstr "Monthly Rank"
+
+msgid "total_rank"
+msgstr "Total Rank"
+
+# Search messages
+msgid "search_placeholder"
+msgstr "Search stories, characters, creators…"
+
+msgid "advanced_search"
+msgstr "Advanced"
+
+msgid "random"
+msgstr "Random"
+
+# Filter messages
+msgid "filter_all"
+msgstr "All"
+
+msgid "filter_hot"
+msgstr "Hottest"
+
+msgid "filter_new"
+msgstr "Newest"
+
+# Content messages
+msgid "content_works"
+msgstr "Works"
+
+msgid "content_character_cards"
+msgstr "Character Cards"
+
+msgid "platform_created"
+msgstr "Platform Created"
+
+msgid "free"
+msgstr "Free"
+
+msgid "vip"
+msgstr "VIP"
+
+msgid "updated"
+msgstr "Updated"
+
+# Empty state messages
+msgid "empty_content"
+msgstr "No content available"
+
+msgid "empty_hint"
+msgstr "Try changing filters or search keywords"

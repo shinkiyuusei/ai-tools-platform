@@ -1,0 +1,155 @@
+# Chinese translations for AI Tools Platform
+# Copyright (C) 2026
+msgid ""
+msgstr ""
+"Project-Id-Version: AI Tools Platform\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-05-05 00:00+0800\n"
+"PO-Revision-Date: 2026-05-05 00:00+0800\n"
+"Last-Translator: \n"
+"Language: zh\n"
+"Language-Team: Chinese\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# Common messages
+msgid "success"
+msgstr "成功"
+
+msgid "error"
+msgstr "错误"
+
+msgid "invalid_parameter"
+msgstr "参数无效"
+
+msgid "unauthorized"
+msgstr "未授权"
+
+msgid "forbidden"
+msgstr "禁止访问"
+
+msgid "not_found"
+msgstr "资源不存在"
+
+msgid "server_error"
+msgstr "服务器错误"
+
+# User messages
+msgid "user_not_found"
+msgstr "用户不存在"
+
+msgid "user_exists"
+msgstr "用户已存在"
+
+msgid "login_success"
+msgstr "登录成功"
+
+msgid "login_failed"
+msgstr "登录失败"
+
+msgid "register_success"
+msgstr "注册成功"
+
+msgid "register_failed"
+msgstr "注册失败"
+
+# Tool messages
+msgid "tool_not_found"
+msgstr "工具不存在或已下架"
+
+msgid "tool_list_success"
+msgstr "获取工具列表成功"
+
+msgid "tool_collect_success"
+msgstr "收藏成功"
+
+msgid "tool_collect_cancel"
+msgstr "已取消收藏"
+
+# Category messages
+msgid "category_love"
+msgstr "恋爱"
+
+msgid "category_character"
+msgstr "角色"
+
+msgid "category_plot"
+msgstr "剧情"
+
+msgid "category_fantasy"
+msgstr "幻想"
+
+msgid "category_daily"
+msgstr "日常"
+
+# Discovery messages
+msgid "recommend_rank"
+msgstr "推荐榜"
+
+msgid "category_section"
+msgstr "分区"
+
+msgid "chat_section"
+msgstr "约聊"
+
+msgid "recent_publish"
+msgstr "最近发布"
+
+msgid "daily_rank"
+msgstr "日榜"
+
+msgid "weekly_rank"
+msgstr "周榜"
+
+msgid "monthly_rank"
+msgstr "月榜"
+
+msgid "total_rank"
+msgstr "总榜"
+
+# Search messages
+msgid "search_placeholder"
+msgstr "搜索故事、角色、创作者…"
+
+msgid "advanced_search"
+msgstr "高级"
+
+msgid "random"
+msgstr "随机"
+
+# Filter messages
+msgid "filter_all"
+msgstr "全部"
+
+msgid "filter_hot"
+msgstr "最热"
+
+msgid "filter_new"
+msgstr "最新"
+
+# Content messages
+msgid "content_works"
+msgstr "作品"
+
+msgid "content_character_cards"
+msgstr "角色卡"
+
+msgid "platform_created"
+msgstr "平台创作"
+
+msgid "free"
+msgstr "免费"
+
+msgid "vip"
+msgstr "会员"
+
+msgid "updated"
+msgstr "已更新"
+
+# Empty state messages
+msgid "empty_content"
+msgstr "暂无故事内容"
+
+msgid "empty_hint"
+msgstr "试试更换筛选条件或搜索关键词"

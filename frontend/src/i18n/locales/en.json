@@ -1,0 +1,102 @@
+{
+  "common": {
+    "success": "Success",
+    "error": "Error",
+    "loading": "Loading...",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "nav": {
+    "home": "Home",
+    "explore": "Explore",
+    "user_center": "User Center",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout"
+  },
+  "discovery": {
+    "recommend_rank": "Recommended",
+    "category_section": "Categories",
+    "chat_section": "Chat",
+    "recent_publish": "Recently Published",
+    "daily_rank": "Daily Rank",
+    "weekly_rank": "Weekly Rank",
+    "monthly_rank": "Monthly Rank",
+    "total_rank": "Total Rank",
+    "search_placeholder": "Search stories, characters, creators…",
+    "advanced_search": "Advanced",
+    "random": "Random",
+    "filter_all": "All",
+    "filter_hot": "Hottest",
+    "filter_new": "Newest",
+    "content_works": "Works",
+    "content_character_cards": "Character Cards",
+    "platform_created": "Platform Created",
+    "free": "Free",
+    "vip": "VIP",
+    "updated": "Updated",
+    "empty_content": "No content available",
+    "empty_hint": "Try changing filters or search keywords",
+    "forum_hot": "Forum Hot",
+    "author_rank": "Author Rank",
+    "custom_rank": "Custom",
+    "premium": "Premium"
+  },
+  "home": {
+    "hero_title": "Zhi Nong",
+    "hero_subtitle": "AI Interactive Creation Platform · Explore Infinite Story Worlds",
+    "start_explore": "Start Exploring",
+    "join_now": "Join Now",
+    "hot_works": "Hot Works",
+    "view_more": "View More",
+    "start_create": "Start Your Creative Journey",
+    "create_cta": "Log in to create your own interactive stories",
+    "login_now": "Log In Now"
+  },
+  "categories": {
+    "love": "Romance",
+    "character": "Character",
+    "plot": "Plot",
+    "fantasy": "Fantasy",
+    "daily": "Daily Life"
+  },
+  "auth": {
+    "login_title": "Login",
+    "register_title": "Register",
+    "email": "Email",
+    "password": "Password",
+    "confirm_password": "Confirm Password",
+    "username": "Username",
+    "login_btn": "Login",
+    "register_btn": "Register",
+    "forgot_password": "Forgot password?",
+    "no_account": "No account?",
+    "has_account": "Already have an account?"
+  },
+  "language": {
+    "select_language": "Select Language",
+    "zh": "中文",
+    "en": "English",
+    "ja": "日本語",
+    "ko": "한국어"
+  },
+  "character": {
+    "create_title": "Create Character Card",
+    "edit_title": "Edit Character Card",
+    "create_new": "New Character Card",
+    "name": "Character Name",
+    "name_placeholder": "Enter character name",
+    "avatar": "Character Avatar",
+    "description": "Character Description",
+    "description_placeholder": "Briefly describe this character",
+    "personality": "Personality Traits",
+    "personality_placeholder": "Describe the character's personality",
+    "background": "Background Story",
+    "background_placeholder": "Describe the character's background story",
+    "tags": "Tags",
+    "tags_placeholder": "Separate multiple tags with commas",
+    "category": "Category",
+    "is_public": "Public Display",
+    "delete_confirm": "Are you sure you want to delete this character card?"
+  }
+}

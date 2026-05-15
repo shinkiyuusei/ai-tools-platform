@@ -1,0 +1,155 @@
+# Japanese translations for AI Tools Platform
+# Copyright (C) 2026
+msgid ""
+msgstr ""
+"Project-Id-Version: AI Tools Platform\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-05-05 00:00+0800\n"
+"PO-Revision-Date: 2026-05-05 00:00+0800\n"
+"Last-Translator: \n"
+"Language: ja\n"
+"Language-Team: Japanese\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+# Common messages
+msgid "success"
+msgstr "成功"
+
+msgid "error"
+msgstr "エラー"
+
+msgid "invalid_parameter"
+msgstr "無効なパラメータ"
+
+msgid "unauthorized"
+msgstr "認証されていません"
+
+msgid "forbidden"
+msgstr "アクセス禁止"
+
+msgid "not_found"
+msgstr "リソースが見つかりません"
+
+msgid "server_error"
+msgstr "サーバーエラー"
+
+# User messages
+msgid "user_not_found"
+msgstr "ユーザーが見つかりません"
+
+msgid "user_exists"
+msgstr "ユーザーは既に存在します"
+
+msgid "login_success"
+msgstr "ログイン成功"
+
+msgid "login_failed"
+msgstr "ログイン失敗"
+
+msgid "register_success"
+msgstr "登録成功"
+
+msgid "register_failed"
+msgstr "登録失敗"
+
+# Tool messages
+msgid "tool_not_found"
+msgstr "ツールが見つからないか削除されました"
+
+msgid "tool_list_success"
+msgstr "ツールリストの取得に成功しました"
+
+msgid "tool_collect_success"
+msgstr "コレクションに追加しました"
+
+msgid "tool_collect_cancel"
+msgstr "コレクションから削除しました"
+
+# Category messages
+msgid "category_love"
+msgstr "恋愛"
+
+msgid "category_character"
+msgstr "キャラクター"
+
+msgid "category_plot"
+msgstr "ストーリー"
+
+msgid "category_fantasy"
+msgstr "ファンタジー"
+
+msgid "category_daily"
+msgstr "日常"
+
+# Discovery messages
+msgid "recommend_rank"
+msgstr "おすすめ"
+
+msgid "category_section"
+msgstr "カテゴリー"
+
+msgid "chat_section"
+msgstr "チャット"
+
+msgid "recent_publish"
+msgstr "最近公開"
+
+msgid "daily_rank"
+msgstr "デイリーランキング"
+
+msgid "weekly_rank"
+msgstr "週間ランキング"
+
+msgid "monthly_rank"
+msgstr "月間ランキング"
+
+msgid "total_rank"
+msgstr "総合ランキング"
+
+# Search messages
+msgid "search_placeholder"
+msgstr "ストーリー、キャラクター、クリエイターを検索…"
+
+msgid "advanced_search"
+msgstr "詳細"
+
+msgid "random"
+msgstr "ランダム"
+
+# Filter messages
+msgid "filter_all"
+msgstr "すべて"
+
+msgid "filter_hot"
+msgstr "人気順"
+
+msgid "filter_new"
+msgstr "新しい順"
+
+# Content messages
+msgid "content_works"
+msgstr "作品"
+
+msgid "content_character_cards"
+msgstr "キャラクターカード"
+
+msgid "platform_created"
+msgstr "プラットフォーム作成"
+
+msgid "free"
+msgstr "無料"
+
+msgid "vip"
+msgstr "VIP"
+
+msgid "updated"
+msgstr "更新済み"
+
+# Empty state messages
+msgid "empty_content"
+msgstr "コンテンツがありません"
+
+msgid "empty_hint"
+msgstr "フィルターや検索キーワードを変更してみてください"

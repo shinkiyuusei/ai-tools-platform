@@ -1,0 +1,38 @@
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+backend/.env
+backend/.venv/
+backend/instance/
+
+frontend/node_modules/
+frontend/dist/
+.env
+.env.local
+
+# MCP config (contains API keys)
+.mcp.json
+
+# Claude local settings (machine-specific)
+.claude/settings.local.json
+
+# Uploaded user content
+uploads/
+
+# Temp / screenshot files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp

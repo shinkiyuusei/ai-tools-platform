@@ -1,0 +1,7 @@
+{
+  "permissionMode": "bypassPermissions",
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "firecrawl"
+  ]
+}

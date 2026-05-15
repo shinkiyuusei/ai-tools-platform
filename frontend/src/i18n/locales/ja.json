@@ -1,0 +1,102 @@
+{
+  "common": {
+    "success": "成功",
+    "error": "エラー",
+    "loading": "読み込み中...",
+    "confirm": "確認",
+    "cancel": "キャンセル"
+  },
+  "nav": {
+    "home": "ホーム",
+    "explore": "探索",
+    "user_center": "ユーザーセンター",
+    "login": "ログイン",
+    "register": "登録",
+    "logout": "ログアウト"
+  },
+  "discovery": {
+    "recommend_rank": "おすすめ",
+    "category_section": "カテゴリー",
+    "chat_section": "チャット",
+    "recent_publish": "最近公開",
+    "daily_rank": "デイリーランキング",
+    "weekly_rank": "週間ランキング",
+    "monthly_rank": "月間ランキング",
+    "total_rank": "総合ランキング",
+    "search_placeholder": "ストーリー、キャラクター、クリエイターを検索…",
+    "advanced_search": "詳細",
+    "random": "ランダム",
+    "filter_all": "すべて",
+    "filter_hot": "人気順",
+    "filter_new": "新しい順",
+    "content_works": "作品",
+    "content_character_cards": "キャラクターカード",
+    "platform_created": "プラットフォーム作成",
+    "free": "無料",
+    "vip": "VIP",
+    "updated": "更新済み",
+    "empty_content": "コンテンツがありません",
+    "empty_hint": "フィルターや検索キーワードを変更してみてください",
+    "forum_hot": "フォーラム人気",
+    "author_rank": "作者ランク",
+    "custom_rank": "カスタム",
+    "premium": "プレミアム"
+  },
+  "home": {
+    "hero_title": "知弄",
+    "hero_subtitle": "AIインタラクティブ創作プラットフォーム · 無限のストーリー世界を探索",
+    "start_explore": "探索を始める",
+    "join_now": "今すぐ参加",
+    "hot_works": "人気作品",
+    "view_more": "もっと見る",
+    "start_create": "創作の旅を始めよう",
+    "create_cta": "ログインして自分だけのインタラクティブストーリーを作成",
+    "login_now": "今すぐログイン"
+  },
+  "categories": {
+    "love": "恋愛",
+    "character": "キャラクター",
+    "plot": "ストーリー",
+    "fantasy": "ファンタジー",
+    "daily": "日常"
+  },
+  "auth": {
+    "login_title": "ログイン",
+    "register_title": "登録",
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "confirm_password": "パスワード確認",
+    "username": "ユーザー名",
+    "login_btn": "ログイン",
+    "register_btn": "登録",
+    "forgot_password": "パスワードをお忘れですか？",
+    "no_account": "アカウントをお持ちでないですか？",
+    "has_account": "すでにアカウントをお持ちですか？"
+  },
+  "language": {
+    "select_language": "言語を選択",
+    "zh": "中文",
+    "en": "English",
+    "ja": "日本語",
+    "ko": "한국어"
+  },
+  "character": {
+    "create_title": "キャラクターカード作成",
+    "edit_title": "キャラクターカード編集",
+    "create_new": "新しいキャラクターカード",
+    "name": "キャラクター名",
+    "name_placeholder": "キャラクター名を入力",
+    "avatar": "キャラクターアバター",
+    "description": "キャラクター説明",
+    "description_placeholder": "キャラクターを簡単に説明",
+    "personality": "性格",
+    "personality_placeholder": "キャラクターの性格を説明",
+    "background": "背景ストーリー",
+    "background_placeholder": "キャラクターの背景ストーリーを説明",
+    "tags": "タグ",
+    "tags_placeholder": "複数のタグをカンマで区切る",
+    "category": "カテゴリー",
+    "is_public": "公開表示",
+    "delete_confirm": "このキャラクターカードを削除してもよろしいですか？"
+  }
+}

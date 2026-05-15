@@ -1,0 +1,102 @@
+{
+  "common": {
+    "success": "성공",
+    "error": "오류",
+    "loading": "로딩 중...",
+    "confirm": "확인",
+    "cancel": "취소"
+  },
+  "nav": {
+    "home": "홈",
+    "explore": "탐색",
+    "user_center": "사용자 센터",
+    "login": "로그인",
+    "register": "회원가입",
+    "logout": "로그아웃"
+  },
+  "discovery": {
+    "recommend_rank": "추천",
+    "category_section": "카테고리",
+    "chat_section": "채팅",
+    "recent_publish": "최근 게시",
+    "daily_rank": "일일 랭킹",
+    "weekly_rank": "주간 랭킹",
+    "monthly_rank": "월간 랭킹",
+    "total_rank": "전체 랭킹",
+    "search_placeholder": "스토리, 캐릭터, 크리에이터 검색…",
+    "advanced_search": "고급",
+    "random": "무작위",
+    "filter_all": "전체",
+    "filter_hot": "인기순",
+    "filter_new": "최신순",
+    "content_works": "작품",
+    "content_character_cards": "캐릭터 카드",
+    "platform_created": "플랫폼 생성",
+    "free": "무료",
+    "vip": "VIP",
+    "updated": "업데이트됨",
+    "empty_content": "콘텐츠가 없습니다",
+    "empty_hint": "필터나 검색 키워드를 변경해보세요",
+    "forum_hot": "포럼 인기",
+    "author_rank": "작가 랭킹",
+    "custom_rank": "커스텀",
+    "premium": "프리미엄"
+  },
+  "home": {
+    "hero_title": "지농",
+    "hero_subtitle": "AI 인터랙티브 창작 플랫폼 · 무한한 스토리 세계 탐험",
+    "start_explore": "탐색 시작",
+    "join_now": "지금 가입",
+    "hot_works": "인기 작품",
+    "view_more": "더 보기",
+    "start_create": "창작 여정 시작하기",
+    "create_cta": "로그인하여 나만의 인터랙티브 스토리를 만드세요",
+    "login_now": "지금 로그인"
+  },
+  "categories": {
+    "love": "연애",
+    "character": "캐릭터",
+    "plot": "스토리",
+    "fantasy": "판타지",
+    "daily": "일상"
+  },
+  "auth": {
+    "login_title": "로그인",
+    "register_title": "회원가입",
+    "email": "이메일",
+    "password": "비밀번호",
+    "confirm_password": "비밀번호 확인",
+    "username": "사용자명",
+    "login_btn": "로그인",
+    "register_btn": "회원가입",
+    "forgot_password": "비밀번호를 잊으셨나요?",
+    "no_account": "계정이 없으신가요?",
+    "has_account": "이미 계정이 있으신가요?"
+  },
+  "language": {
+    "select_language": "언어 선택",
+    "zh": "中文",
+    "en": "English",
+    "ja": "日本語",
+    "ko": "한국어"
+  },
+  "character": {
+    "create_title": "캐릭터 카드 만들기",
+    "edit_title": "캐릭터 카드 편집",
+    "create_new": "새 캐릭터 카드",
+    "name": "캐릭터 이름",
+    "name_placeholder": "캐릭터 이름을 입력하세요",
+    "avatar": "캐릭터 아바타",
+    "description": "캐릭터 설명",
+    "description_placeholder": "캐릭터를 간단히 설명하세요",
+    "personality": "성격 특성",
+    "personality_placeholder": "캐릭터의 성격을 설명하세요",
+    "background": "배경 이야기",
+    "background_placeholder": "캐릭터의 배경 이야기를 설명하세요",
+    "tags": "태그",
+    "tags_placeholder": "여러 태그를 쉼표로 구분",
+    "category": "카테고리",
+    "is_public": "공개 표시",
+    "delete_confirm": "이 캐릭터 카드를 삭제하시겠습니까?"
+  }
+}

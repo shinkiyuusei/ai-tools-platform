@@ -1,0 +1,102 @@
+{
+  "common": {
+    "success": "成功",
+    "error": "错误",
+    "loading": "加载中...",
+    "confirm": "确认",
+    "cancel": "取消"
+  },
+  "nav": {
+    "home": "首页",
+    "explore": "发现",
+    "user_center": "个人中心",
+    "login": "登录",
+    "register": "注册",
+    "logout": "退出"
+  },
+  "discovery": {
+    "recommend_rank": "推荐榜",
+    "category_section": "分区",
+    "chat_section": "约聊",
+    "recent_publish": "最近发布",
+    "daily_rank": "日榜",
+    "weekly_rank": "周榜",
+    "monthly_rank": "月榜",
+    "total_rank": "总榜",
+    "search_placeholder": "搜索故事、角色、创作者…",
+    "advanced_search": "高级",
+    "random": "随机",
+    "filter_all": "全部",
+    "filter_hot": "最热",
+    "filter_new": "最新",
+    "content_works": "作品卡",
+    "content_character_cards": "角色卡",
+    "platform_created": "平台创作",
+    "free": "免费",
+    "vip": "会员",
+    "updated": "已更新",
+    "empty_content": "暂无故事内容",
+    "empty_hint": "试试更换筛选条件或搜索关键词",
+    "forum_hot": "论坛热帖",
+    "author_rank": "作者榜",
+    "custom_rank": "自定义",
+    "premium": "高级"
+  },
+  "home": {
+    "hero_title": "知弄",
+    "hero_subtitle": "AI 互动创作平台 · 探索无限故事世界",
+    "start_explore": "开始探索",
+    "join_now": "立即加入",
+    "hot_works": "热门作品",
+    "view_more": "查看更多",
+    "start_create": "开始你的创作之旅",
+    "create_cta": "登录后即可创建属于你自己的互动故事",
+    "login_now": "立即登录"
+  },
+  "categories": {
+    "love": "恋爱",
+    "character": "角色",
+    "plot": "剧情",
+    "fantasy": "幻想",
+    "daily": "日常"
+  },
+  "auth": {
+    "login_title": "登录",
+    "register_title": "注册",
+    "email": "邮箱",
+    "password": "密码",
+    "confirm_password": "确认密码",
+    "username": "用户名",
+    "login_btn": "登录",
+    "register_btn": "注册",
+    "forgot_password": "忘记密码？",
+    "no_account": "没有账号？",
+    "has_account": "已有账号？"
+  },
+  "language": {
+    "select_language": "选择语言",
+    "zh": "中文",
+    "en": "English",
+    "ja": "日本語",
+    "ko": "한국어"
+  },
+  "character": {
+    "create_title": "创建角色卡",
+    "edit_title": "编辑角色卡",
+    "create_new": "新建角色卡",
+    "name": "角色名称",
+    "name_placeholder": "请输入角色名称",
+    "avatar": "角色头像",
+    "description": "角色描述",
+    "description_placeholder": "简要描述这个角色",
+    "personality": "性格特点",
+    "personality_placeholder": "描述角色的性格特点",
+    "background": "背景故事",
+    "background_placeholder": "描述角色的背景故事",
+    "tags": "标签",
+    "tags_placeholder": "用逗号分隔多个标签",
+    "category": "分类",
+    "is_public": "公开显示",
+    "delete_confirm": "确定要删除这个角色卡吗？"
+  }
+}

@@ -1,0 +1,338 @@
+/* ============================================
+   知弄 · 六色美学设计系统
+   AI 交互式创作平台
+   ============================================ */
+
+/* --- CSS Custom Properties --- */
+:root {
+  /* 六色美学 · Six-Color Aesthetic */
+  --color-misty-blue: #7b9cbf;
+  --color-misty-blue-soft: #a3bedb;
+  --color-misty-blue-deep: #5a7fa3;
+  --color-silver-gray: #9e9eaa;
+  --color-silver-gray-soft: #c4c4ce;
+  --color-silver-gray-deep: #6e6e7a;
+  --color-candy-pink: #eea2b4;
+  --color-candy-pink-soft: #f5c6d2;
+  --color-candy-pink-deep: #d4788c;
+  --color-crimson: #c85554;
+  --color-crimson-soft: #e08080;
+  --color-crimson-deep: #9e3a3a;
+  --color-dark-green: #3d6b56;
+  --color-dark-green-soft: #5e8f76;
+  --color-dark-green-deep: #2a4d3c;
+  --color-pale: #e2d9cf;
+  --color-pale-soft: #f0ebe3;
+  --color-pale-deep: #c8bdb0;
+
+  /* 主题色 · Brand */
+  --color-brand: var(--color-misty-blue);
+  --color-brand-soft: var(--color-misty-blue-soft);
+  --color-brand-deep: var(--color-misty-blue-deep);
+  --color-accent: var(--color-crimson);
+  --color-accent-soft: var(--color-crimson-soft);
+
+  /* 深色主题基础 · Dark Theme Base */
+  --bg-primary: #0d0d14;
+  --bg-secondary: #141420;
+  --bg-tertiary: #1a1a28;
+  --bg-card: #1c1c2a;
+  --bg-card-hover: #222233;
+  --bg-elevated: #252538;
+  --bg-input: #1a1a28;
+  --bg-overlay: rgba(0, 0, 0, 0.65);
+  --bg-glass: rgba(20, 20, 32, 0.85);
+
+  /* 文字色 · Text Colors */
+  --text-primary: #f0ebe3;
+  --text-secondary: #b0a8a0;
+  --text-tertiary: #6e6a64;
+  --text-disabled: #4a4642;
+  --text-link: var(--color-misty-blue-soft);
+  --text-link-hover: var(--color-misty-blue);
+
+  /* 边框 · Borders */
+  --border-primary: #2a2a38;
+  --border-secondary: #1e1e2e;
+  --border-card: #262636;
+  --border-input: #2e2e40;
+  --border-focus: var(--color-misty-blue-deep);
+
+  /* 阴影 · Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --shadow-glow-misty: 0 0 20px rgba(123, 156, 191, 0.15);
+  --shadow-glow-crimson: 0 0 20px rgba(200, 85, 84, 0.15);
+  --shadow-glow-pink: 0 0 20px rgba(238, 162, 180, 0.15);
+
+  /* 圆角 · Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* 间距 · Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* 字体 · Typography */
+  --font-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: 'Noto Serif SC', 'STSong', 'Songti SC', 'SimSun', 'Georgia', serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+
+  /* 字体大小 · Font Sizes */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+  --text-4xl: 48px;
+
+  /* 行高 · Line Heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.8;
+  --leading-loose: 2.0;
+
+  /* 过渡 · Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Z-Index */
+  --z-sidebar: 30;
+  --z-header: 40;
+  --z-overlay: 50;
+  --z-modal: 60;
+  --z-toast: 70;
+
+  /* 布局 · Layout */
+  --sidebar-width: 230px;
+  --max-content-width: 1280px;
+}
+
+/* --- Reset & Base --- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  min-width: 320px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--text-link);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--text-link-hover);
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  border: none;
+  background: none;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* --- Typography --- */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+  margin-bottom: 0.5em;
+}
+
+h1 { font-size: var(--text-3xl); letter-spacing: -0.02em; }
+h2 { font-size: var(--text-2xl); letter-spacing: -0.01em; }
+h3 { font-size: var(--text-xl); }
+h4 { font-size: var(--text-lg); }
+
+p {
+  margin-bottom: 0.75em;
+  color: var(--text-secondary);
+}
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* --- Selection --- */
+::selection {
+  background: var(--color-misty-blue-deep);
+  color: var(--text-primary);
+}
+
+/* --- Focus --- */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* --- Utility: Glass Effect --- */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-primary);
+}
+
+/* --- Utility: Gradient Text --- */
+.gradient-text-misty {
+  background: linear-gradient(135deg, var(--color-misty-blue), var(--color-misty-blue-soft));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-crimson {
+  background: linear-gradient(135deg, var(--color-crimson), var(--color-candy-pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* --- Utility: Gradient Backgrounds --- */
+.gradient-hero {
+  background: linear-gradient(135deg, #1a1028 0%, #1c1c2e 30%, #162028 60%, #1a1a24 100%);
+}
+
+.gradient-card-misty {
+  background: linear-gradient(135deg, rgba(123, 156, 191, 0.08), rgba(123, 156, 191, 0.02));
+}
+
+.gradient-card-crimson {
+  background: linear-gradient(135deg, rgba(200, 85, 84, 0.08), rgba(200, 85, 84, 0.02));
+}
+
+.gradient-card-pink {
+  background: linear-gradient(135deg, rgba(238, 162, 180, 0.08), rgba(238, 162, 180, 0.02));
+}
+
+.gradient-card-green {
+  background: linear-gradient(135deg, rgba(61, 107, 86, 0.08), rgba(61, 107, 86, 0.02));
+}
+
+/* --- Animations --- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(123, 156, 191, 0.1); }
+  50% { box-shadow: 0 0 20px rgba(123, 156, 191, 0.25); }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp var(--transition-slow) ease-out;
+}
+
+.animate-fade-in-scale {
+  animation: fadeInScale var(--transition-base) ease-out;
+}
+
+/* --- Skeleton Loading --- */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-elevated) 50%, var(--bg-card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+  min-height: 200px;
+}
+
+/* --- Responsive Breakpoints Reference --- */
+/* sm: 640px | md: 768px | lg: 1024px | xl: 1280px | 2xl: 1536px */

@@ -1,0 +1,270 @@
+import json
+
+from flask import Blueprint, request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+
+from ...core.errors import AppError, ErrorCode
+from ...utils.mysql import execute, query_all, query_one
+from ...utils.response import page_response, success_response
+from ...utils.snowflake import generate_id
+
+admin_bp = Blueprint("admin", __name__)
+
+
+def _check_admin(user_id: int):
+    user = query_one(
+        "SELECT vip_level FROM t_user WHERE id = %s AND status = 1 AND is_delete = 0",
+        (user_id,),
+    )
+    if not user or user["vip_level"] < 2:
+        raise AppError(ErrorCode.FORBIDDEN, "无管理员权限")
+
+
+@admin_bp.get("/admin/category")
+@jwt_required()
+def list_categories():
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    parent_id = request.args.get("parentId", type=int)
+    where = ""
+    params = []
+    if parent_id is not None:
+        where = "WHERE parent_id = %s"
+        params.append(parent_id)
+
+    items = query_all(
+        f"SELECT id, name, parent_id AS parentId, icon, sort_order AS sortOrder, create_time AS createTime FROM t_tool_category {where} ORDER BY sort_order ASC",
+        tuple(params),
+    )
+    return success_response({"list": items})
+
+
+@admin_bp.post("/admin/category")
+@jwt_required()
+def create_category():
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    payload = request.get_json(silent=True) or {}
+    name = payload.get("name", "")
+    parent_id = payload.get("parentId", 0)
+    icon = payload.get("icon", "")
+    sort_order = payload.get("sortOrder", 0)
+
+    if not name:
+        raise AppError(ErrorCode.PARAM_INVALID, "分类名称不能为空")
+
+    cat_id = execute(
+        "INSERT INTO t_tool_category (name, parent_id, icon, sort_order) VALUES (%s,%s,%s,%s)",
+        (name, parent_id, icon, sort_order),
+    )
+    return success_response({"id": cat_id, "message": "创建成功"})
+
+
+@admin_bp.put("/admin/category/<int:cat_id>")
+@jwt_required()
+def update_category(cat_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    payload = request.get_json(silent=True) or {}
+    fields = []
+    params = []
+    for key in ["name", "parent_id", "icon", "sort_order"]:
+        val = payload.get(key) if key != "parent_id" else payload.get("parentId")
+        if val is not None:
+            db_key = "parent_id" if key == "parent_id" else key
+            fields.append(f"{db_key} = %s")
+            params.append(val)
+
+    if not fields:
+        raise AppError(ErrorCode.PARAM_INVALID, "没有需要修改的内容")
+
+    params.append(cat_id)
+    execute(f"UPDATE t_tool_category SET {', '.join(fields)} WHERE id = %s", tuple(params))
+    return success_response({"message": "更新成功"})
+
+
+@admin_bp.delete("/admin/category/<int:cat_id>")
+@jwt_required()
+def delete_category(cat_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    execute("DELETE FROM t_tool_category WHERE id = %s", (cat_id,))
+    return success_response({"message": "删除成功"})
+
+
+# ---- Tag Management ----
+
+@admin_bp.get("/admin/tag")
+def list_tags():
+    items = query_all(
+        "SELECT id, name, sort_order AS sortOrder, create_time AS createTime "
+        "FROM t_tag ORDER BY sort_order ASC",
+        (),
+    )
+    return success_response({"list": items})
+
+
+@admin_bp.post("/admin/tag")
+@jwt_required()
+def create_tag():
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+    payload = request.get_json(silent=True) or {}
+    name = payload.get("name", "")
+    if not name:
+        raise AppError(ErrorCode.PARAM_INVALID, "标签名称不能为空")
+    sort_order = payload.get("sortOrder", 0)
+    tag_id = execute(
+        "INSERT INTO t_tag (name, sort_order) VALUES (%s, %s)",
+        (name, sort_order),
+    )
+    return success_response({"id": tag_id, "message": "创建成功"})
+
+
+@admin_bp.put("/admin/tag/<int:tag_id>")
+@jwt_required()
+def update_tag(tag_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+    payload = request.get_json(silent=True) or {}
+    fields = []
+    params = []
+    for db_key in ["name", "sort_order"]:
+        json_key = "sortOrder" if db_key == "sort_order" else db_key
+        val = payload.get(json_key)
+        if val is not None:
+            fields.append(f"{db_key} = %s")
+            params.append(val)
+    if not fields:
+        raise AppError(ErrorCode.PARAM_INVALID, "没有需要修改的内容")
+    params.append(tag_id)
+    execute(f"UPDATE t_tag SET {', '.join(fields)} WHERE id = %s", tuple(params))
+    return success_response({"message": "更新成功"})
+
+
+@admin_bp.delete("/admin/tag/<int:tag_id>")
+@jwt_required()
+def delete_tag(tag_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+    execute("DELETE FROM t_tag WHERE id = %s", (tag_id,))
+    return success_response({"message": "删除成功"})
+
+
+@admin_bp.get("/admin/tool")
+@jwt_required()
+def list_tools():
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    page_num = int(request.args.get("pageNum", 1))
+    page_size = min(int(request.args.get("pageSize", 10)), 50)
+
+    total_row = query_one("SELECT COUNT(*) AS total FROM t_ai_tool", ())
+    total = total_row["total"]
+
+    items = query_all(
+        "SELECT id,name,icon,`desc`,category_id AS categoryId,tag_ids AS tagIds,"
+        "is_free AS isFree,is_vip AS isVip,use_count AS useCount,"
+        "sort_order AS sortOrder,status,create_time AS createTime "
+        "FROM t_ai_tool ORDER BY sort_order ASC LIMIT %s OFFSET %s",
+        (page_size, (page_num - 1) * page_size),
+    )
+    from .tool import _resolve_tag_names
+    items = _resolve_tag_names(items)
+    return page_response(items, total=total, page_num=page_num, page_size=page_size)
+
+
+@admin_bp.post("/admin/tool")
+@jwt_required()
+def create_tool():
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    payload = request.get_json(silent=True) or {}
+    name = payload.get("name", "")
+    if not name:
+        raise AppError(ErrorCode.PARAM_INVALID, "工具名称不能为空")
+
+    form_config = payload.get("formConfig", {})
+    if isinstance(form_config, (list, dict)):
+        form_config = json.dumps(form_config, ensure_ascii=False)
+
+    tool_id = execute(
+        "INSERT INTO t_ai_tool (name,icon,`desc`,use_desc,category_id,tag_ids,form_config,ai_api,"
+        "is_free,is_vip,use_count,sort_order,status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        (
+            name,
+            payload.get("icon", ""),
+            payload.get("desc", ""),
+            payload.get("useDesc", ""),
+            payload.get("categoryId", 0),
+            payload.get("tagIds", ""),
+            form_config,
+            payload.get("aiApi", "deepseek"),
+            payload.get("isFree", 1),
+            payload.get("isVip", 0),
+            0,
+            payload.get("sortOrder", 0),
+            payload.get("status", 1),
+        ),
+    )
+    return success_response({"id": tool_id, "message": "创建成功"})
+
+
+@admin_bp.put("/admin/tool/<int:tool_id>")
+@jwt_required()
+def update_tool(tool_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    payload = request.get_json(silent=True) or {}
+    field_map = {
+        "name": "name",
+        "icon": "icon",
+        "desc": "desc",
+        "useDesc": "use_desc",
+        "categoryId": "category_id",
+        "tagIds": "tag_ids",
+        "aiApi": "ai_api",
+        "isFree": "is_free",
+        "isVip": "is_vip",
+        "sortOrder": "sort_order",
+        "status": "status",
+    }
+    fields = []
+    params = []
+    for json_key, db_key in field_map.items():
+        val = payload.get(json_key)
+        if val is not None:
+            if json_key == "desc":
+                fields.append(f"`{db_key}` = %s")
+            else:
+                fields.append(f"{db_key} = %s")
+            params.append(val)
+
+    if "formConfig" in payload:
+        fields.append("form_config = %s")
+        fc = payload["formConfig"]
+        params.append(json.dumps(fc, ensure_ascii=False) if isinstance(fc, (list, dict)) else fc)
+
+    if not fields:
+        raise AppError(ErrorCode.PARAM_INVALID, "没有需要修改的内容")
+
+    params.append(tool_id)
+    execute(f"UPDATE t_ai_tool SET {', '.join(fields)} WHERE id = %s", tuple(params))
+    return success_response({"message": "更新成功"})
+
+
+@admin_bp.delete("/admin/tool/<int:tool_id>")
+@jwt_required()
+def delete_tool(tool_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    execute("DELETE FROM t_ai_tool WHERE id = %s", (tool_id,))
+    return success_response({"message": "删除成功"})
