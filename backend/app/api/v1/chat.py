@@ -33,6 +33,15 @@ def _build_work_response(tool, config, perspective=None):
     # Build the enhanced full system prompt from rich data
     full_prompt = build_enhanced_system_prompt(work_name, config, perspective)
 
+    # When perspective is swapped, hide the static opening line since it was
+    # written for the default protagonist. The opening is instead woven into
+    # the system prompt so the AI can reinterpret it from the new perspective.
+    protagonist_name = config.get("protagonist", {}).get("name", "").strip()
+    perspective_name = perspective.get("name", "").strip() if perspective else ""
+    raw_opening = config.get("opening", "")
+    if perspective_name and perspective_name != protagonist_name:
+        raw_opening = ""
+
     return success_response({
         "id": tool["id"],
         "name": work_name,
@@ -42,7 +51,7 @@ def _build_work_response(tool, config, perspective=None):
         "isVip": tool.get("isVip", 0),
         "useCount": tool.get("useCount", 0),
         "aiApi": tool.get("ai_api", "deepseek"),
-        "opening": config.get("opening", ""),
+        "opening": raw_opening,
         "systemPrompt": full_prompt,
         "author": config.get("author", ""),
         "rating": config.get("rating", 0),

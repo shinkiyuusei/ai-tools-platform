@@ -6,6 +6,7 @@ import { characterApi } from '../api/character'
 import BaseInput from '../components/base/BaseInput.vue'
 import BasePagination from '../components/base/BasePagination.vue'
 import AppLayout from '../layouts/AppLayout.vue'
+import { formatTokens, formatScore } from '../utils/format'
 
 const { t } = useI18n()
 
@@ -24,7 +25,6 @@ const categoryId = ref(null)
 const pageNum = ref(1)
 const pageSize = ref(12)
 
-const showForum = ref(false)
 
 const categoryTabs = [
   { key: 'premium', label: 'discovery.premium' },
@@ -95,19 +95,27 @@ const fetchList = async () => {
               name: name.trim()
             }))
           : []
+        const tokens = Number(item.view_count || 0)
+        const likes = Number(item.like_count || 0)
+        let honorTier = null
+        if (tokens >= 1000000 || likes >= 50000) honorTier = 'gold'
+        else if (tokens >= 100000 || likes >= 10000) honorTier = 'silver'
+        else if (tokens >= 10000) honorTier = 'bronze'
         return {
           id: item.id,
           name: item.name,
           icon: item.avatar || '',
           desc: item.description || '',
-          useCount: item.view_count || 0,
-          likeCount: item.like_count || 0,
+          useCount: tokens,
+          likeCount: likes,
           collectCount: item.collect_count || 0,
           isFree: true,
           isVip: false,
           createTime: item.create_time,
           categoryId: item.category_id,
           tags: tagList,
+          rating: item.rating || 0,
+          honorTier,
           _type: 'character',
         }
       })
@@ -144,26 +152,6 @@ const handlePageChange = (page) => {
   fetchList()
 }
 
-const formatHot = (num) => {
-  const value = Number(num || 0)
-  if (value >= 100000000) return `${(value / 100000000).toFixed(1)}亿`
-  if (value >= 10000) return `${(value / 10000).toFixed(1)}万`
-  return `${value}`
-}
-
-const formatScore = (item) => {
-  const base = 8 + ((Number(item.id || 0) % 18) / 10)
-  return base.toFixed(1)
-}
-
-const getHonorTier = (item) => {
-  const views = Number(item.useCount || 0)
-  const likes = Number(item.likeCount || 0)
-  if (views >= 100000000 || likes >= 50000) return 'gold'
-  if (views >= 1000000 || likes >= 10000) return 'silver'
-  if (views >= 100000) return 'bronze'
-  return null
-}
 
 const getCategoryColor = (catId) => {
   const cat = categories.find(c => c.id === catId)
@@ -225,17 +213,6 @@ onMounted(fetchList)
         <span :class="{ active: sortType === 'hot' }" @click="changeSort('hot')">{{ t('discovery.filter_hot') }}</span>
         <span :class="{ active: sortType === 'new' }" @click="changeSort('new')">{{ t('discovery.filter_new') }}</span>
         <span class="divider" />
-        <span class="forum-header-toggle" @click="showForum = !showForum">
-          🔥 {{ t('discovery.forum_hot') }} {{ showForum ? '▲' : '▼' }}
-        </span>
-      </div>
-
-      <div v-if="showForum" class="forum-posts">
-        <div v-for="n in 5" :key="n" class="forum-post-item">
-          <span class="post-rank">{{ n }}</span>
-          <span class="post-title">热门讨论话题 #{{ n }}</span>
-          <span class="post-replies">{{ Math.max(99 - n * 15, 5) }} 回复</span>
-        </div>
       </div>
 
       <div v-if="loading" class="skeleton-grid">
@@ -259,9 +236,9 @@ onMounted(fetchList)
               <img v-if="item.icon" :src="item.icon" :alt="item.name" class="cover-img" />
               <span v-else class="cover-text">{{ item.name.slice(0, 2) }}</span>
             </div>
-            <span class="hot-badge">{{ formatHot(item.useCount) }}</span>
-            <span v-if="getHonorTier(item)" :class="['honor-badge', `honor--${getHonorTier(item)}`]">
-              {{ getHonorTier(item) === 'gold' ? '金' : getHonorTier(item) === 'silver' ? '银' : '铜' }}
+            <span class="hot-badge">{{ formatTokens(item.useCount) }}</span>
+            <span v-if="item.honorTier" :class="['honor-badge', `honor--${item.honorTier}`]">
+              {{ { gold: '金', silver: '银', bronze: '铜' }[item.honorTier] }}
             </span>
             <div class="rating-overlay">
               <span class="rating-star">★</span>
@@ -745,55 +722,6 @@ onMounted(fetchList)
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   letter-spacing: 0.02em;
-}
-
-/* --- Forum Section --- */
-.forum-header-toggle {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition: color var(--transition-fast);
-  margin-left: auto;
-}
-.forum-header-toggle:hover { color: var(--color-crimson-soft); }
-
-.forum-posts {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: var(--space-lg);
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-card);
-  padding: var(--space-sm);
-}
-.forum-post-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
-}
-.forum-post-item:hover { background: var(--bg-elevated); }
-.post-rank {
-  color: var(--color-crimson-soft);
-  font-weight: 700;
-  font-size: var(--text-xs);
-  min-width: 20px;
-}
-.post-title {
-  flex: 1;
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.post-replies {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  flex-shrink: 0;
 }
 
 /* --- Responsive --- */

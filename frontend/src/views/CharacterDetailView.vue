@@ -9,7 +9,7 @@
           <h1>{{ character.name }}</h1>
           <div class="stats-row">
             <span class="stat">♥ {{ character.like_count || 0 }}</span>
-            <span class="stat">👁 {{ formatViews(character.view_count) }}</span>
+            <span class="stat">👁 {{ formatTokens(character.view_count) }}</span>
             <span class="stat">★ {{ character.collect_count || 0 }}</span>
           </div>
         </div>
@@ -17,7 +17,10 @@
 
       <div class="content-body">
         <div class="info-card">
-          <h3>角色简介</h3>
+          <div class="info-card-header">
+            <h3>角色简介</h3>
+            <StarRating work-type="character" :work-id="Number(route.params.id)" />
+          </div>
           <p class="description">{{ character.description || '暂无描述' }}</p>
         </div>
 
@@ -50,7 +53,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { characterApi } from '../api/character'
 import TagBadge from '../components/TagBadge.vue'
+import StarRating from '../components/StarRating.vue'
 import AppLayout from '../layouts/AppLayout.vue'
+import { formatTokens } from '../utils/format'
 
 const route = useRoute()
 const character = ref(null)
@@ -63,13 +68,6 @@ const tagList = computed(() => {
     name: name.trim()
   }))
 })
-
-const formatViews = (num) => {
-  const value = Number(num || 0)
-  if (value >= 100000000) return `${(value / 100000000).toFixed(1)}亿`
-  if (value >= 10000) return `${(value / 10000).toFixed(1)}万`
-  return `${value}`
-}
 
 onMounted(async () => {
   try {
@@ -157,6 +155,17 @@ onMounted(async () => {
   border: 1px solid var(--border-card);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
+}
+
+.info-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+
+.info-card-header h3 {
+  margin: 0;
 }
 
 .info-card h3 {

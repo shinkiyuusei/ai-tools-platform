@@ -4,7 +4,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { createTag, deleteTag, getTagList, updateTag } from '../../api/admin'
 import BaseButton from '../../components/base/BaseButton.vue'
 import BaseInput from '../../components/base/BaseInput.vue'
-import AdminLayout from '../../layouts/AdminLayout.vue'
+import AppLayout from '../../layouts/AppLayout.vue'
 
 const list = ref([])
 const dialogVisible = ref(false)
@@ -64,7 +64,7 @@ onMounted(fetchList)
 </script>
 
 <template>
-  <AdminLayout>
+  <AppLayout>
     <div class="page">
       <div class="header-row">
         <h1>标签管理</h1>
@@ -108,7 +108,7 @@ onMounted(fetchList)
         </div>
       </div>
     </div>
-  </AdminLayout>
+  </AppLayout>
 </template>
 
 <style scoped>

@@ -4,17 +4,6 @@ CREATE DATABASE IF NOT EXISTS ai_tools_platform
 
 USE ai_tools_platform;
 
--- 工具分类表
-CREATE TABLE IF NOT EXISTS t_tool_category (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(50) NOT NULL,
-  parent_id INT NOT NULL DEFAULT 0,
-  icon VARCHAR(255) NOT NULL DEFAULT '',
-  sort_order INT NOT NULL DEFAULT 0,
-  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- 标签定义表
 CREATE TABLE IF NOT EXISTS t_tag (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -65,7 +54,6 @@ CREATE TABLE IF NOT EXISTS t_ai_tool (
   icon VARCHAR(255) NOT NULL DEFAULT '',
   `desc` VARCHAR(200) NOT NULL DEFAULT '',
   use_desc TEXT,
-  category_id INT NOT NULL DEFAULT 0,
   tag_ids VARCHAR(100) NOT NULL DEFAULT '',
   form_config TEXT,
   ai_api VARCHAR(255) NOT NULL DEFAULT '',
@@ -76,7 +64,6 @@ CREATE TABLE IF NOT EXISTS t_ai_tool (
   status TINYINT NOT NULL DEFAULT 1,
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_category (category_id),
   INDEX idx_status (status),
   INDEX idx_use_count (use_count)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -107,7 +94,6 @@ CREATE TABLE IF NOT EXISTS t_character_card (
   personality TEXT NOT NULL,
   background TEXT NOT NULL,
   tags VARCHAR(500) NOT NULL DEFAULT '',
-  category_id INT NOT NULL DEFAULT 0,
   is_public TINYINT NOT NULL DEFAULT 1,
   is_vip TINYINT NOT NULL DEFAULT 0,
   like_count INT NOT NULL DEFAULT 0,
@@ -117,7 +103,6 @@ CREATE TABLE IF NOT EXISTS t_character_card (
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_user_id (user_id),
-  INDEX idx_category (category_id),
   INDEX idx_status (status),
   INDEX idx_like_count (like_count),
   INDEX idx_create_time (create_time)

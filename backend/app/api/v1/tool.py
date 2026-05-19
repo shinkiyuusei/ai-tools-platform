@@ -59,17 +59,12 @@ def _resolve_tag_names(items):
 def tool_list():
     page_num = int(request.args.get("pageNum", 1))
     page_size = min(int(request.args.get("pageSize", 10)), 50)
-    category_id = request.args.get("categoryId", type=int)
     tag_id = request.args.get("tagId")
     sort_type = request.args.get("sortType", "hot")
     keyword = request.args.get("keyword", "")
 
     where = ["status = 1"]
     params = []
-
-    if category_id:
-        where.append("category_id = %s")
-        params.append(category_id)
 
     if tag_id:
         where.append("FIND_IN_SET(%s, tag_ids) > 0")
@@ -92,7 +87,7 @@ def tool_list():
     total_row = query_one(count_sql, tuple(params))
     total = total_row["total"]
 
-    data_sql = f"SELECT id,name,icon,`desc`,tag_ids AS tagIds,use_count AS useCount,is_free AS isFree,is_vip AS isVip,create_time AS createTime FROM t_ai_tool WHERE {where_clause} ORDER BY {order_clause} LIMIT %s OFFSET %s"
+    data_sql = f"SELECT id,name,icon,`desc`,tag_ids AS tagIds,use_count AS useCount,is_free AS isFree,is_vip AS isVip,create_time AS createTime,COALESCE(JSON_EXTRACT(form_config, '$.rating'), 0) AS rating FROM t_ai_tool WHERE {where_clause} ORDER BY {order_clause} LIMIT %s OFFSET %s"
     params.extend([page_size, (page_num - 1) * page_size])
     items = query_all(data_sql, tuple(params))
     items = _resolve_tag_names(items)
@@ -103,9 +98,10 @@ def tool_list():
 @tool_bp.get("/tool/detail/<int:tool_id>")
 def tool_detail(tool_id: int):
     tool = query_one(
-        "SELECT id,name,icon,`desc`,use_desc AS useDesc,category_id AS categoryId,"
+        "SELECT id,name,icon,`desc`,use_desc AS useDesc,"
         "tag_ids AS tagIds,form_config AS formConfig,ai_api AS aiApi,"
-        "is_free AS isFree,is_vip AS isVip,use_count AS useCount "
+        "is_free AS isFree,is_vip AS isVip,use_count AS useCount,"
+        "COALESCE(JSON_EXTRACT(form_config, '$.rating'), 0) AS rating "
         "FROM t_ai_tool WHERE id = %s AND status = 1",
         (tool_id,),
     )

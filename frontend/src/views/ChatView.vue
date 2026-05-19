@@ -3,6 +3,8 @@ import { ref, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { chatApi, conversationApi } from '../api/chat'
 import AppLayout from '../layouts/AppLayout.vue'
+import StarRating from '../components/StarRating.vue'
+import { formatTokens } from '../utils/format'
 
 const route = useRoute()
 const workId = Number(route.params.workId)
@@ -251,8 +253,15 @@ const extractSceneContext = (content) => {
   }
 }
 
-const parseChoices = (content) => {
+const findChoiceIndex = (content) => {
   const idx = content.indexOf('【抉择分支】')
+  if (idx >= 0) return idx
+  const m = content.match(/#{1,3}\s*抉择分支/)
+  return m ? m.index : -1
+}
+
+const parseChoices = (content) => {
+  const idx = findChoiceIndex(content)
   if (idx === -1) return []
   const after = content.slice(idx)
   const lines = after.split('\n')
@@ -262,7 +271,7 @@ const parseChoices = (content) => {
 }
 
 const stripChoices = (content) => {
-  const idx = content.indexOf('【抉择分支】')
+  const idx = findChoiceIndex(content)
   return idx >= 0 ? content.slice(0, idx).trimEnd() : content
 }
 
@@ -280,13 +289,6 @@ const pickChoice = (text) => {
   if (sending.value) return
   inputText.value = text
   sendMessage()
-}
-
-const formatViews = (num) => {
-  const v = Number(num || 0)
-  if (v >= 100000000) return (v / 100000000).toFixed(1) + '亿'
-  if (v >= 10000) return (v / 10000).toFixed(1) + '万'
-  return String(v)
 }
 
 const handleKeydown = (e) => {
@@ -413,8 +415,10 @@ onMounted(async () => {
           <p class="sb-desc">{{ work.desc }}</p>
           <div class="sb-meta">
             <span v-if="work.author">{{ work.author }}</span>
-            <span v-if="work.rating">⭐ {{ work.rating }}</span>
-            <span>{{ formatViews(work.useCount) }} 次对话</span>
+            <span>{{ formatTokens(work.useCount) }}</span>
+          </div>
+          <div class="sb-rating-row">
+            <StarRating work-type="tool" :work-id="work.id" />
           </div>
         </div>
 
@@ -828,6 +832,14 @@ onMounted(async () => {
   gap: var(--space-sm);
   font-size: 11px;
   color: var(--text-tertiary);
+}
+
+.sb-rating-row {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-card);
 }
 
 /* Opening Bubble */

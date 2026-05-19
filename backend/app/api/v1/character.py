@@ -7,6 +7,7 @@ from flask import Blueprint, request, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from werkzeug.utils import secure_filename
 
+from ...utils.crud import dynamic_update
 from ...utils.mysql import query_one, query_all, execute
 from ...utils.response import success_response
 from ...core.errors import AppError, ErrorCode
@@ -14,7 +15,14 @@ from ...core.errors import AppError, ErrorCode
 character_bp = Blueprint("character", __name__)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_FILE_SIZE = 5 * 1024 * 1024
+
+_CHARACTER_RATING_JOIN = (
+    "LEFT JOIN (SELECT work_id, ROUND(AVG(score), 1) AS avg_rating "
+    "FROM t_rating WHERE work_type = 'character' GROUP BY work_id) r "
+    "ON c.id = r.work_id"
+)
+_CHARACTER_RATING_SELECT = "COALESCE(r.avg_rating, 0) AS rating"
 
 
 def allowed_file(filename):
@@ -62,18 +70,13 @@ def get_character_list():
     """Get character card list with filters"""
     page_num = int(request.args.get("pageNum", 1))
     page_size = min(int(request.args.get("pageSize", 12)), 50)
-    category_id = request.args.get("categoryId", type=int)
     user_id = request.args.get("userId", type=int)
     sort_type = request.args.get("sortType", "new")  # new, hot, like
     keyword = request.args.get("keyword", "")
-    
+
     where = ["status = 1", "is_public = 1"]
     params = []
-    
-    if category_id:
-        where.append("category_id = %s")
-        params.append(category_id)
-    
+
     if user_id:
         where.append("user_id = %s")
         params.append(user_id)
@@ -97,16 +100,19 @@ def get_character_list():
     total_row = query_one(count_sql, tuple(params))
     total = total_row["total"]
     
-    # Get paginated results
+    # Get paginated results with rating from t_rating
     data_sql = (
-        f"SELECT id, user_id, name, avatar, description, personality, background, tags, "
-        f"category_id, is_public, like_count, view_count, collect_count, create_time "
-        f"FROM t_character_card WHERE {where_clause} "
+        f"SELECT c.id, c.user_id, c.name, c.avatar, c.description, c.personality, c.background, c.tags, "
+        f"c.is_public, c.like_count, c.view_count, c.collect_count, c.create_time, "
+        f"{_CHARACTER_RATING_SELECT} "
+        f"FROM t_character_card c "
+        f"{_CHARACTER_RATING_JOIN} "
+        f"WHERE {where_clause} "
         f"ORDER BY {order_clause} LIMIT %s OFFSET %s"
     )
     params.extend([page_size, (page_num - 1) * page_size])
     items = query_all(data_sql, tuple(params))
-    
+
     return success_response({
         "list": items,
         "total": total,
@@ -119,9 +125,12 @@ def get_character_list():
 def get_character_detail(character_id: int):
     """Get character card detail"""
     character = query_one(
-        "SELECT id, user_id, name, avatar, description, personality, background, tags, "
-        "category_id, is_public, like_count, view_count, collect_count, create_time "
-        "FROM t_character_card WHERE id = %s AND status = 1",
+        f"SELECT c.id, c.user_id, c.name, c.avatar, c.description, c.personality, c.background, c.tags, "
+        f"c.is_public, c.like_count, c.view_count, c.collect_count, c.create_time, "
+        f"{_CHARACTER_RATING_SELECT} "
+        f"FROM t_character_card c "
+        f"{_CHARACTER_RATING_JOIN} "
+        f"WHERE c.id = %s AND c.status = 1",
         (character_id,)
     )
     
@@ -147,17 +156,16 @@ def create_character():
     personality = payload.get("personality", "")
     background = payload.get("background", "")
     tags = payload.get("tags", "")
-    category_id = payload.get("categoryId", 0)
     is_public = payload.get("isPublic", 1)
-    
+
     if not name:
         raise AppError(ErrorCode.PARAM_INVALID, "name is required")
-    
+
     character_id = execute(
         "INSERT INTO t_character_card "
-        "(user_id, name, avatar, description, personality, background, tags, category_id, is_public) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-        (user_id, name, avatar, description, personality, background, tags, category_id, is_public)
+        "(user_id, name, avatar, description, personality, background, tags, is_public) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (user_id, name, avatar, description, personality, background, tags, is_public)
     )
     
     return success_response({"id": character_id})
@@ -182,49 +190,15 @@ def update_character(character_id: int):
     if character["user_id"] != user_id:
         raise AppError(ErrorCode.PERMISSION_DENIED, "Permission denied")
     
-    # Update fields
-    update_fields = []
-    params = []
-    
-    if "name" in payload:
-        update_fields.append("name = %s")
-        params.append(payload["name"])
-    
-    if "avatar" in payload:
-        update_fields.append("avatar = %s")
-        params.append(payload["avatar"])
-    
-    if "description" in payload:
-        update_fields.append("description = %s")
-        params.append(payload["description"])
-    
-    if "personality" in payload:
-        update_fields.append("personality = %s")
-        params.append(payload["personality"])
-    
-    if "background" in payload:
-        update_fields.append("background = %s")
-        params.append(payload["background"])
-    
-    if "tags" in payload:
-        update_fields.append("tags = %s")
-        params.append(payload["tags"])
-    
-    if "category_id" in payload:
-        update_fields.append("category_id = %s")
-        params.append(payload["categoryId"])
-    
-    if "is_public" in payload:
-        update_fields.append("is_public = %s")
-        params.append(payload["isPublic"])
-    
-    if update_fields:
-        params.append(character_id)
-        execute(
-            f"UPDATE t_character_card SET {', '.join(update_fields)} WHERE id = %s",
-            tuple(params)
-        )
-    
+    dynamic_update("t_character_card", {
+        "name": "name",
+        "avatar": "avatar",
+        "description": "description",
+        "personality": "personality",
+        "background": "background",
+        "tags": "tags",
+        "isPublic": "is_public",
+    }, payload, "id", character_id)
     return success_response({"success": True})
 
 
@@ -318,11 +292,14 @@ def get_my_characters():
     total_row = query_one(count_sql, tuple(params))
     total = total_row["total"]
     
-    # Get paginated results
+    # Get paginated results with rating
     data_sql = (
-        f"SELECT id, name, avatar, description, personality, background, tags, "
-        f"category_id, is_public, like_count, view_count, collect_count, create_time "
-        f"FROM t_character_card WHERE {where_clause} "
+        f"SELECT c.id, c.name, c.avatar, c.description, c.personality, c.background, c.tags, "
+        f"c.is_public, c.like_count, c.view_count, c.collect_count, c.create_time, "
+        f"{_CHARACTER_RATING_SELECT} "
+        f"FROM t_character_card c "
+        f"{_CHARACTER_RATING_JOIN} "
+        f"WHERE {where_clause} "
         f"ORDER BY create_time DESC LIMIT %s OFFSET %s"
     )
     params.extend([page_size, (page_num - 1) * page_size])

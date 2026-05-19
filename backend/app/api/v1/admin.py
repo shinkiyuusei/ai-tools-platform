@@ -4,6 +4,7 @@ from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...core.errors import AppError, ErrorCode
+from ...utils.crud import dynamic_update
 from ...utils.mysql import execute, query_all, query_one
 from ...utils.response import page_response, success_response
 from ...utils.snowflake import generate_id
@@ -18,82 +19,6 @@ def _check_admin(user_id: int):
     )
     if not user or user["vip_level"] < 2:
         raise AppError(ErrorCode.FORBIDDEN, "无管理员权限")
-
-
-@admin_bp.get("/admin/category")
-@jwt_required()
-def list_categories():
-    user_id = int(get_jwt_identity())
-    _check_admin(user_id)
-
-    parent_id = request.args.get("parentId", type=int)
-    where = ""
-    params = []
-    if parent_id is not None:
-        where = "WHERE parent_id = %s"
-        params.append(parent_id)
-
-    items = query_all(
-        f"SELECT id, name, parent_id AS parentId, icon, sort_order AS sortOrder, create_time AS createTime FROM t_tool_category {where} ORDER BY sort_order ASC",
-        tuple(params),
-    )
-    return success_response({"list": items})
-
-
-@admin_bp.post("/admin/category")
-@jwt_required()
-def create_category():
-    user_id = int(get_jwt_identity())
-    _check_admin(user_id)
-
-    payload = request.get_json(silent=True) or {}
-    name = payload.get("name", "")
-    parent_id = payload.get("parentId", 0)
-    icon = payload.get("icon", "")
-    sort_order = payload.get("sortOrder", 0)
-
-    if not name:
-        raise AppError(ErrorCode.PARAM_INVALID, "分类名称不能为空")
-
-    cat_id = execute(
-        "INSERT INTO t_tool_category (name, parent_id, icon, sort_order) VALUES (%s,%s,%s,%s)",
-        (name, parent_id, icon, sort_order),
-    )
-    return success_response({"id": cat_id, "message": "创建成功"})
-
-
-@admin_bp.put("/admin/category/<int:cat_id>")
-@jwt_required()
-def update_category(cat_id: int):
-    user_id = int(get_jwt_identity())
-    _check_admin(user_id)
-
-    payload = request.get_json(silent=True) or {}
-    fields = []
-    params = []
-    for key in ["name", "parent_id", "icon", "sort_order"]:
-        val = payload.get(key) if key != "parent_id" else payload.get("parentId")
-        if val is not None:
-            db_key = "parent_id" if key == "parent_id" else key
-            fields.append(f"{db_key} = %s")
-            params.append(val)
-
-    if not fields:
-        raise AppError(ErrorCode.PARAM_INVALID, "没有需要修改的内容")
-
-    params.append(cat_id)
-    execute(f"UPDATE t_tool_category SET {', '.join(fields)} WHERE id = %s", tuple(params))
-    return success_response({"message": "更新成功"})
-
-
-@admin_bp.delete("/admin/category/<int:cat_id>")
-@jwt_required()
-def delete_category(cat_id: int):
-    user_id = int(get_jwt_identity())
-    _check_admin(user_id)
-
-    execute("DELETE FROM t_tool_category WHERE id = %s", (cat_id,))
-    return success_response({"message": "删除成功"})
 
 
 # ---- Tag Management ----
@@ -131,18 +56,7 @@ def update_tag(tag_id: int):
     user_id = int(get_jwt_identity())
     _check_admin(user_id)
     payload = request.get_json(silent=True) or {}
-    fields = []
-    params = []
-    for db_key in ["name", "sort_order"]:
-        json_key = "sortOrder" if db_key == "sort_order" else db_key
-        val = payload.get(json_key)
-        if val is not None:
-            fields.append(f"{db_key} = %s")
-            params.append(val)
-    if not fields:
-        raise AppError(ErrorCode.PARAM_INVALID, "没有需要修改的内容")
-    params.append(tag_id)
-    execute(f"UPDATE t_tag SET {', '.join(fields)} WHERE id = %s", tuple(params))
+    dynamic_update("t_tag", {"name": "name", "sortOrder": "sort_order"}, payload, "id", tag_id)
     return success_response({"message": "更新成功"})
 
 
@@ -168,7 +82,8 @@ def list_tools():
     total = total_row["total"]
 
     items = query_all(
-        "SELECT id,name,icon,`desc`,category_id AS categoryId,tag_ids AS tagIds,"
+        "SELECT id,name,icon,`desc`,use_desc AS useDesc,tag_ids AS tagIds,"
+        "form_config AS formConfig,ai_api AS aiApi,"
         "is_free AS isFree,is_vip AS isVip,use_count AS useCount,"
         "sort_order AS sortOrder,status,create_time AS createTime "
         "FROM t_ai_tool ORDER BY sort_order ASC LIMIT %s OFFSET %s",
@@ -195,14 +110,13 @@ def create_tool():
         form_config = json.dumps(form_config, ensure_ascii=False)
 
     tool_id = execute(
-        "INSERT INTO t_ai_tool (name,icon,`desc`,use_desc,category_id,tag_ids,form_config,ai_api,"
-        "is_free,is_vip,use_count,sort_order,status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        "INSERT INTO t_ai_tool (name,icon,`desc`,use_desc,tag_ids,form_config,ai_api,"
+        "is_free,is_vip,use_count,sort_order,status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (
             name,
             payload.get("icon", ""),
             payload.get("desc", ""),
             payload.get("useDesc", ""),
-            payload.get("categoryId", 0),
             payload.get("tagIds", ""),
             form_config,
             payload.get("aiApi", "deepseek"),
@@ -228,7 +142,6 @@ def update_tool(tool_id: int):
         "icon": "icon",
         "desc": "desc",
         "useDesc": "use_desc",
-        "categoryId": "category_id",
         "tagIds": "tag_ids",
         "aiApi": "ai_api",
         "isFree": "is_free",
@@ -267,4 +180,92 @@ def delete_tool(tool_id: int):
     _check_admin(user_id)
 
     execute("DELETE FROM t_ai_tool WHERE id = %s", (tool_id,))
+    return success_response({"message": "删除成功"})
+
+
+# ---- Character Card Management ----
+
+@admin_bp.get("/admin/character")
+@jwt_required()
+def list_characters_admin():
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    page_num = int(request.args.get("pageNum", 1))
+    page_size = min(int(request.args.get("pageSize", 10)), 50)
+    keyword = request.args.get("keyword", "")
+
+    where = ["1=1"]
+    params = []
+    if keyword:
+        where.append("(name LIKE %s OR description LIKE %s)")
+        params.extend([f"%{keyword}%", f"%{keyword}%"])
+
+    where_clause = " AND ".join(where)
+    total_row = query_one(f"SELECT COUNT(*) AS total FROM t_character_card WHERE {where_clause}", tuple(params))
+    total = total_row["total"]
+
+    items = query_all(
+        f"SELECT id, user_id AS userId, name, avatar, description, personality, background, tags, "
+        f"is_public AS isPublic, is_vip AS isVip, "
+        f"like_count AS likeCount, view_count AS viewCount, collect_count AS collectCount, "
+        f"status, create_time AS createTime "
+        f"FROM t_character_card WHERE {where_clause} "
+        f"ORDER BY create_time DESC LIMIT %s OFFSET %s",
+        tuple(params + [page_size, (page_num - 1) * page_size]),
+    )
+    return page_response(items, total=total, page_num=page_num, page_size=page_size)
+
+
+@admin_bp.get("/admin/character/<int:char_id>")
+@jwt_required()
+def get_character_admin(char_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    char = query_one(
+        "SELECT id, user_id AS userId, name, avatar, description, personality, background, tags, "
+        "is_public AS isPublic, is_vip AS isVip, "
+        "like_count AS likeCount, view_count AS viewCount, collect_count AS collectCount, "
+        "status, create_time AS createTime "
+        "FROM t_character_card WHERE id = %s",
+        (char_id,),
+    )
+    if not char:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "角色卡不存在")
+    return success_response(char)
+
+
+@admin_bp.put("/admin/character/<int:char_id>")
+@jwt_required()
+def update_character_admin(char_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    payload = request.get_json(silent=True) or {}
+    field_map = {
+        "name": "name",
+        "avatar": "avatar",
+        "description": "description",
+        "personality": "personality",
+        "background": "background",
+        "tags": "tags",
+        "isPublic": "is_public",
+        "isVip": "is_vip",
+        "status": "status",
+        "likeCount": "like_count",
+        "viewCount": "view_count",
+        "collectCount": "collect_count",
+    }
+    dynamic_update("t_character_card", field_map, payload, "id", char_id)
+    return success_response({"message": "更新成功"})
+
+
+@admin_bp.delete("/admin/character/<int:char_id>")
+@jwt_required()
+def delete_character_admin(char_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    execute("UPDATE t_character_card SET status = 0 WHERE id = %s", (char_id,))
     return success_response({"message": "删除成功"})

@@ -1,21 +1,19 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 
-import { createTool, deleteTool, getTagList, getToolListAdmin, updateTool } from '../../api/admin'
+import { createTool, deleteTool, getToolListAdmin, updateTool } from '../../api/admin'
 import BaseButton from '../../components/base/BaseButton.vue'
 import BaseInput from '../../components/base/BaseInput.vue'
 import BasePagination from '../../components/base/BasePagination.vue'
-import AdminLayout from '../../layouts/AdminLayout.vue'
+import AppLayout from '../../layouts/AppLayout.vue'
 
 const listData = ref({ list: [], total: 0, pageNum: 1, pageSize: 10 })
 const dialogVisible = ref(false)
 const loading = ref(false)
 const isEdit = ref(false)
-const allTags = ref([])
-const selectedTagIds = ref([])
 
 const form = reactive({
-  id: null, name: '', desc: '', useDesc: '', categoryId: 0, tagIds: '',
+  id: null, name: '', icon: '', desc: '', useDesc: '',
   formConfig: '', aiApi: 'deepseek', isFree: 1, isVip: 0, sortOrder: 0, status: 1,
 })
 
@@ -30,41 +28,24 @@ const fetchList = async () => {
   }
 }
 
-const loadTags = async () => {
-  try {
-    const res = await getTagList()
-    allTags.value = res.data.list || []
-  } catch { /* */ }
-}
-
-const toggleTag = (tagId) => {
-  const idx = selectedTagIds.value.indexOf(tagId)
-  if (idx >= 0) selectedTagIds.value.splice(idx, 1)
-  else selectedTagIds.value.push(tagId)
-  form.tagIds = selectedTagIds.value.join(',')
-}
-
 const openCreate = () => {
   isEdit.value = false
   Object.assign(form, {
-    id: null, name: '', desc: '', useDesc: '', categoryId: 0, tagIds: '',
+    id: null, name: '', icon: '', desc: '', useDesc: '',
     formConfig: '', aiApi: 'deepseek', isFree: 1, isVip: 0, sortOrder: 0, status: 1,
   })
-  selectedTagIds.value = []
   dialogVisible.value = true
 }
 
 const openEdit = (item) => {
   isEdit.value = true
   Object.assign(form, {
-    id: item.id, name: item.name, desc: item.desc, useDesc: item.useDesc || '',
-    categoryId: item.categoryId, tagIds: item.tagIds,
-    formConfig: item.formConfig || '', aiApi: item.aiApi || 'deepseek',
-    isFree: item.isFree, isVip: item.isVip, sortOrder: item.sortOrder, status: item.status,
+    id: item.id, name: item.name, icon: item.icon || '', desc: item.desc || '',
+    useDesc: item.useDesc || '',
+    formConfig: typeof item.formConfig === 'string' ? item.formConfig : JSON.stringify(item.formConfig || {}, null, 2),
+    aiApi: item.aiApi || 'deepseek', isFree: item.isFree ?? 1, isVip: item.isVip ?? 0,
+    sortOrder: item.sortOrder ?? 0, status: item.status ?? 1,
   })
-  selectedTagIds.value = item.tagIds
-    ? item.tagIds.split(',').map(Number).filter(Boolean)
-    : []
   dialogVisible.value = true
 }
 
@@ -102,11 +83,11 @@ const handlePageChange = (page) => {
   fetchList()
 }
 
-onMounted(() => { fetchList(); loadTags() })
+onMounted(fetchList)
 </script>
 
 <template>
-  <AdminLayout>
+  <AppLayout>
     <div class="page">
       <div class="header-row">
         <h1>工具管理</h1>
@@ -117,19 +98,20 @@ onMounted(() => { fetchList(); loadTags() })
         <table class="table">
           <thead>
             <tr>
-              <th>ID</th><th>名称</th><th>分类</th><th>免费</th><th>会员</th><th>使用次数</th><th>状态</th><th>操作</th>
+              <th>ID</th><th>图标</th><th>名称</th><th>AI接口</th><th>免费</th><th>VIP</th><th>排序</th><th>状态</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in listData.list" :key="item.id">
               <td>{{ item.id }}</td>
+              <td><img v-if="item.icon" :src="item.icon" class="icon-preview" /></td>
               <td>{{ item.name }}</td>
-              <td>{{ item.categoryId }}</td>
+              <td>{{ item.aiApi || '-' }}</td>
               <td>{{ item.isFree ? '是' : '否' }}</td>
               <td>{{ item.isVip ? '是' : '否' }}</td>
-              <td>{{ item.useCount }}</td>
-              <td>{{ item.status === 1 ? '上架' : '下架' }}</td>
-              <td>
+              <td>{{ item.sortOrder }}</td>
+              <td><span :class="['status-tag', item.status === 1 ? 'on' : 'off']">{{ item.status === 1 ? '上架' : '下架' }}</span></td>
+              <td class="actions-cell">
                 <button class="action-btn" @click="openEdit(item)">编辑</button>
                 <button class="action-btn danger" @click="handleDelete(item.id)">删除</button>
               </td>
@@ -148,66 +130,77 @@ onMounted(() => { fetchList(); loadTags() })
       />
 
       <div v-if="dialogVisible" class="dialog-overlay" @click.self="dialogVisible = false">
-        <div class="dialog">
+        <div class="dialog dialog-wide">
           <h2>{{ isEdit ? '编辑工具' : '新增工具' }}</h2>
-          <div class="form-group">
-            <BaseInput v-model="form.name" placeholder="工具名称" label="名称 *" />
-          </div>
-          <div class="form-group">
-            <BaseInput v-model="form.desc" placeholder="简短描述" label="描述" />
-          </div>
-          <div class="form-group">
-            <label>使用说明</label>
-            <textarea v-model="form.useDesc" class="base-textarea" rows="3" placeholder="使用说明" />
-          </div>
-          <div class="form-row">
-            <div class="form-group half">
-              <BaseInput v-model.number="form.categoryId" placeholder="分类ID" label="分类ID" />
-            </div>
-            <div class="form-group half">
-              <label>标签</label>
-              <div class="tag-picker">
-                <label v-for="tag in allTags" :key="tag.id" class="tag-checkbox">
-                  <input
-                    type="checkbox"
-                    :checked="selectedTagIds.includes(tag.id)"
-                    @change="toggleTag(tag.id)"
-                  />
-                  {{ tag.name }}
-                </label>
+          <div class="dialog-body">
+            <!-- 基础信息 -->
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <BaseInput v-model="form.name" placeholder="工具名称" label="名称 *" />
+              </div>
+              <div class="form-group flex-1">
+                <BaseInput v-model="form.icon" placeholder="图标URL" label="图标" />
               </div>
             </div>
-          </div>
-          <div class="form-group">
-            <label>表单配置(JSON)</label>
-            <textarea v-model="form.formConfig" class="base-textarea" rows="5" placeholder='[{"field":"topic","label":"主题","type":"text","required":true}]' />
-          </div>
-          <div class="form-row">
-            <div class="form-group half">
-              <BaseInput v-model.number="form.sortOrder" label="排序" />
+            <div class="form-group">
+              <label>描述</label>
+              <textarea v-model="form.desc" class="base-textarea" rows="2" placeholder="简短描述" />
             </div>
-            <div class="form-group half">
-              <label>状态</label>
-              <select v-model.number="form.status" class="base-select">
-                <option :value="1">上架</option>
-                <option :value="0">下架</option>
-              </select>
+            <div class="form-group">
+              <label>使用说明</label>
+              <textarea v-model="form.useDesc" class="base-textarea" rows="3" placeholder="详细使用说明" />
             </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group half">
-              <label>免费工具</label>
-              <select v-model.number="form.isFree" class="base-select">
-                <option :value="1">是</option>
-                <option :value="0">否</option>
-              </select>
+
+            <!-- AI接口 -->
+            <div class="form-row">
+              <div class="form-group half">
+                <label>AI 接口</label>
+                <select v-model="form.aiApi" class="base-select">
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="claude">Claude</option>
+                  <option value="qwen">通义千问</option>
+                  <option value="glm">智谱GLM</option>
+                  <option value="moonshot">Moonshot</option>
+                  <option value="">无</option>
+                </select>
+              </div>
+              <div class="form-group half">
+                <BaseInput v-model.number="form.sortOrder" label="排序" placeholder="越小越靠前" />
+              </div>
             </div>
-            <div class="form-group half">
-              <label>会员专属</label>
-              <select v-model.number="form.isVip" class="base-select">
-                <option :value="1">是</option>
-                <option :value="0">否</option>
-              </select>
+
+            <!-- 表单配置 -->
+            <div class="form-group">
+              <label>表单配置 (JSON)</label>
+              <textarea v-model="form.formConfig" class="base-textarea mono" rows="8" placeholder='[{"field":"topic","label":"主题","type":"text","required":true}]' />
+            </div>
+
+            <!-- 状态和权限 -->
+            <div class="form-row">
+              <div class="form-group half">
+                <label>状态</label>
+                <select v-model.number="form.status" class="base-select">
+                  <option :value="1">上架</option>
+                  <option :value="0">下架</option>
+                </select>
+              </div>
+              <div class="form-group half">
+                <label>免费工具</label>
+                <select v-model.number="form.isFree" class="base-select">
+                  <option :value="1">是</option>
+                  <option :value="0">否</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group half">
+                <label>会员专属</label>
+                <select v-model.number="form.isVip" class="base-select">
+                  <option :value="1">是</option>
+                  <option :value="0">否</option>
+                </select>
+              </div>
             </div>
           </div>
           <div class="dialog-actions">
@@ -217,7 +210,7 @@ onMounted(() => { fetchList(); loadTags() })
         </div>
       </div>
     </div>
-  </AdminLayout>
+  </AppLayout>
 </template>
 
 <style scoped>
@@ -263,13 +256,41 @@ onMounted(() => { fetchList(); loadTags() })
   font-weight: 600;
 }
 
+.icon-preview {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--bg-tertiary);
+}
+
+.status-tag {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+.status-tag.on {
+  color: #4caf8e;
+  background: rgba(76, 175, 142, 0.1);
+}
+
+.status-tag.off {
+  color: #c85554;
+  background: rgba(200, 85, 84, 0.1);
+}
+
+.actions-cell {
+  display: flex;
+  gap: 6px;
+}
+
 .action-btn {
   border: none;
   background: none;
   color: var(--color-misty-blue-soft);
   cursor: pointer;
   font-size: var(--text-xs);
-  margin-right: 12px;
 }
 
 .action-btn.danger {
@@ -287,9 +308,10 @@ onMounted(() => { fetchList(); loadTags() })
   inset: 0;
   background: var(--bg-overlay);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: var(--z-modal);
+  padding-top: 40px;
 }
 
 .dialog {
@@ -297,15 +319,27 @@ onMounted(() => { fetchList(); loadTags() })
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-card);
   padding: var(--space-xl);
-  width: 520px;
-  max-width: 90vw;
-  max-height: 85vh;
-  overflow-y: auto;
+  width: 640px;
+  max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-wide {
+  width: 720px;
 }
 
 .dialog h2 {
   font-size: var(--text-lg);
-  margin-bottom: var(--space-lg);
+  margin: 0 0 var(--space-lg);
+  flex-shrink: 0;
+}
+
+.dialog-body {
+  overflow-y: auto;
+  flex: 1;
+  padding-right: var(--space-sm);
 }
 
 .form-group {
@@ -329,6 +363,9 @@ onMounted(() => { fetchList(); loadTags() })
   flex: 1;
 }
 
+.flex-1 { flex: 1; }
+.flex-2 { flex: 2; }
+
 .base-textarea {
   width: 100%;
   padding: 10px 14px;
@@ -339,6 +376,13 @@ onMounted(() => { fetchList(); loadTags() })
   font-size: var(--text-sm);
   resize: vertical;
   line-height: var(--leading-relaxed);
+  font-family: inherit;
+}
+
+.base-textarea.mono {
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .base-textarea:focus {
@@ -361,38 +405,9 @@ onMounted(() => { fetchList(); loadTags() })
   gap: var(--space-sm);
   justify-content: flex-end;
   margin-top: var(--space-lg);
-}
-
-.tag-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-input);
-  border-radius: var(--radius-md);
-  max-height: 160px;
-  overflow-y: auto;
-}
-
-.tag-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
-}
-
-.tag-checkbox:hover {
-  background: rgba(123, 156, 191, 0.08);
-}
-
-.tag-checkbox input {
-  accent-color: var(--color-misty-blue);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-card);
+  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {

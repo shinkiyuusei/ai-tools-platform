@@ -8,6 +8,8 @@ from flask import current_app
 from ...core.errors import AppError, ErrorCode
 from ...extensions import get_mongo_db, get_redis_client
 
+TOKEN_USAGE_SIGNAL = "\0[TOKENS]"
+
 
 class DeepSeekAdapter:
     def __init__(self):
@@ -36,7 +38,10 @@ class DeepSeekAdapter:
         )
         response.raise_for_status()
         body = response.json()
-        return body["choices"][0]["message"]["content"]
+        return {
+            "content": body["choices"][0]["message"]["content"],
+            "total_tokens": body.get("usage", {}).get("total_tokens", 0),
+        }
 
     def chat_completion(
         self,
@@ -75,7 +80,7 @@ class DeepSeekAdapter:
         thinking_mode: bool = False,
         reasoning_effort: str = "medium",
     ):
-        """Stream chat completion, yielding SSE content chunks."""
+        """Stream chat completion, yielding SSE content chunks and final usage."""
         payload = {
             "model": model or (self.config["reasoner_model"] if thinking_mode else self.config["chat_model"]),
             "messages": messages,
@@ -96,6 +101,7 @@ class DeepSeekAdapter:
         except requests.RequestException as exc:
             raise AppError(ErrorCode.GENERATE_FAILED, f"DeepSeek 调用失败: {exc}") from exc
 
+        total_tokens = 0
         for line in response.iter_lines():
             if not line:
                 continue
@@ -107,11 +113,17 @@ class DeepSeekAdapter:
                 break
             try:
                 chunk = json.loads(data_str)
+                # The final chunk may contain usage data with empty choices
+                usage = chunk.get("usage", {})
+                if usage:
+                    total_tokens = usage.get("total_tokens", 0)
                 choices = chunk.get("choices", [])
                 if choices and choices[0].get("delta", {}).get("content"):
                     yield choices[0]["delta"]["content"]
             except (json.JSONDecodeError, KeyError):
                 continue
+
+        yield f"{TOKEN_USAGE_SIGNAL}{total_tokens}\0"
 
     def submit_async_task(self, tool_id: int, user_id: int, params: dict, tool_name: str = "", thinking_mode: bool = False):
         task_id = f"task_{uuid.uuid4().hex[:16]}"

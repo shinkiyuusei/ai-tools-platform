@@ -8,18 +8,14 @@ home_bp = Blueprint("home", __name__)
 
 @home_bp.get("/home/index")
 def home_index():
-    categories = query_all(
-        "SELECT id, name, icon FROM t_tool_category WHERE parent_id = 0 ORDER BY sort_order ASC"
-    )
     hot_tools = query_all(
         "SELECT id, name, icon, `desc`, use_count AS useCount FROM t_ai_tool WHERE status = 1 ORDER BY use_count DESC LIMIT 8"
     )
     data = {
         "bannerList": [
             {"id": 1, "imgUrl": "/static/banner-1.png", "jumpUrl": "/explore?featured=1"},
-            {"id": 2, "imgUrl": "/static/banner-2.png", "jumpUrl": "/explore?category=1"},
         ],
-        "categoryList": categories,
+        "categoryList": [],
         "hotToolList": hot_tools,
     }
     return success_response(data)

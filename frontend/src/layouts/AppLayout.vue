@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
@@ -9,10 +9,18 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 
+const isAdmin = computed(() => (auth.userInfo?.vipLevel || 0) >= 2)
+
 const menuList = [
   { to: '/explore', label: '发现', desc: '发现故事', icon: '◇', color: 'misty' },
   { to: '/create', label: '创作', desc: 'AI 写作', icon: '◇', color: 'crimson' },
   { to: '/usercenter', label: '我的', desc: '个人中心', icon: '◇', color: 'green' },
+]
+
+const adminMenuList = [
+  { to: '/admin/tool', label: '作品管理', icon: '▣', color: 'gold' },
+  { to: '/admin/character', label: '角色卡管理', icon: '▣', color: 'gold' },
+  { to: '/admin/tag', label: '标签管理', icon: '▣', color: 'gold' },
 ]
 
 const errorMessage = ref('')
@@ -97,6 +105,22 @@ onBeforeUnmount(() => {
             <span class="menu-desc">{{ item.desc }}</span>
           </RouterLink>
         </nav>
+
+        <template v-if="isAdmin">
+          <div class="admin-divider"><span>管理后台</span></div>
+          <nav class="menu admin-menu">
+            <RouterLink
+              v-for="item in adminMenuList"
+              :key="item.to"
+              :to="item.to"
+              class="menu-item"
+              :class="[{ active: isActive(item.to) }, `menu-item--${item.color}`]"
+            >
+              <span class="menu-icon">{{ item.icon }}</span>
+              <span class="menu-label">{{ item.label }}</span>
+            </RouterLink>
+          </nav>
+        </template>
 
         <div class="promo-section">
           <div class="promo-card">
@@ -382,6 +406,10 @@ onBeforeUnmount(() => {
   background: linear-gradient(135deg, rgba(61, 107, 86, 0.12), transparent);
 }
 
+.menu-item--gold::before {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), transparent);
+}
+
 .menu-item:hover {
   color: var(--text-primary);
 }
@@ -411,6 +439,10 @@ onBeforeUnmount(() => {
   border-left: 2px solid var(--color-dark-green);
 }
 
+.menu-item--gold.active {
+  border-left: 2px solid #ffc107;
+}
+
 .menu-icon {
   font-size: 14px;
   flex-shrink: 0;
@@ -431,6 +463,36 @@ onBeforeUnmount(() => {
 
 .sidebar.collapsed .menu-label,
 .sidebar.collapsed .menu-desc { display: none; }
+
+/* --- Admin Divider --- */
+.admin-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 4px 14px 0;
+}
+
+.admin-divider span {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-divider::before,
+.admin-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-secondary);
+}
+
+.sidebar.collapsed .admin-divider span,
+.sidebar.collapsed .admin-divider::before,
+.sidebar.collapsed .admin-divider::after {
+  display: none;
+}
 
 /* --- Promo --- */
 .promo-section {

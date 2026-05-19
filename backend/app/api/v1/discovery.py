@@ -8,6 +8,7 @@ from ...services.recommendation import RecommendationEngine
 from ...extensions import get_redis_client, get_mongo_db
 from ...utils.mysql import query_all, query_one
 from ...utils.response import success_response
+from .character import _CHARACTER_RATING_JOIN, _CHARACTER_RATING_SELECT
 
 discovery_bp = Blueprint("discovery", __name__)
 
@@ -72,7 +73,8 @@ def get_trending():
     
     tools = query_all(
         f"SELECT id, name, icon, `desc`, tag_ids AS tagIds, use_count AS useCount, is_free AS isFree, "
-        f"category_id AS categoryId, 'tool' AS type FROM t_ai_tool WHERE {where} "
+        f"category_id AS categoryId, COALESCE(JSON_EXTRACT(form_config, '$.rating'), 0) AS rating, "
+        f"'tool' AS type FROM t_ai_tool WHERE {where} "
         f"ORDER BY use_count DESC LIMIT %s",
         tuple(params + [limit // 2])
     )
@@ -87,16 +89,19 @@ def get_trending():
         char_params.append(category_id)
     
     characters = query_all(
-        f"SELECT id, name, avatar, description, like_count AS likeCount, view_count AS viewCount, "
-        f"collect_count AS collectCount, 'character' AS type FROM t_character_card "
+        f"SELECT c.id, c.name, c.avatar, c.description, c.like_count AS likeCount, c.view_count AS viewCount, "
+        f"c.collect_count AS collectCount, 'character' AS type, "
+        f"{_CHARACTER_RATING_SELECT} "
+        f"FROM t_character_card c "
+        f"{_CHARACTER_RATING_JOIN} "
         f"WHERE {char_where} ORDER BY like_count DESC LIMIT %s",
         tuple(char_params + [limit // 2])
     )
-    
+
     # Combine and sort by engagement
     trending = tools + characters
     trending.sort(key=lambda x: x.get('useCount') or x.get('likeCount') or 0, reverse=True)
-    
+
     return success_response(trending[:limit])
 
 
@@ -169,7 +174,8 @@ def advanced_search():
     # Get paginated results
     data_sql = (
         f"SELECT id, name, icon, `desc`, tag_ids AS tagIds, use_count AS useCount, is_free AS isFree, "
-        f"is_vip AS isVip, category_id AS categoryId, create_time AS createTime "
+        f"is_vip AS isVip, category_id AS categoryId, create_time AS createTime, "
+        f"COALESCE(JSON_EXTRACT(form_config, '$.rating'), 0) AS rating "
         f"FROM t_ai_tool WHERE {where_clause} ORDER BY {order_clause} LIMIT %s OFFSET %s"
     )
     params.extend([page_size, (page_num - 1) * page_size])
@@ -202,9 +208,12 @@ def get_featured():
     
     # Get featured character cards
     characters = query_all(
-        "SELECT id, name, avatar, description, like_count AS likeCount, view_count AS viewCount, "
-        "collect_count AS collectCount, 'character' AS type FROM t_character_card "
-        "WHERE status = 1 AND is_public = 1 ORDER BY like_count DESC LIMIT %s",
+        f"SELECT c.id, c.name, c.avatar, c.description, c.like_count AS likeCount, c.view_count AS viewCount, "
+        f"c.collect_count AS collectCount, 'character' AS type, "
+        f"{_CHARACTER_RATING_SELECT} "
+        f"FROM t_character_card c "
+        f"{_CHARACTER_RATING_JOIN} "
+        f"WHERE c.status = 1 AND c.is_public = 1 ORDER BY like_count DESC LIMIT %s",
         (limit // 2,)
     )
     

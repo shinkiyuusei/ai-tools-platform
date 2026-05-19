@@ -6,7 +6,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_req
 from ...core.errors import AppError, ErrorCode
 from ...extensions import get_mongo_db, get_redis_client
 from ...middlewares.rate_limit import daily_limit, rate_limit
-from ...services.ai.deepseek import DeepSeekAdapter
+from ...services.ai.deepseek import DeepSeekAdapter, TOKEN_USAGE_SIGNAL
 from ...services.audit import audit_content
 from ...services.chat.prompt_builder import parse_character_states
 from ...utils.mysql import execute, query_one
@@ -15,6 +15,15 @@ from ...utils.snowflake import generate_id
 import json
 
 ai_bp = Blueprint("ai", __name__)
+
+
+def _add_token_usage(work_id: int, tokens: int):
+    if not work_id or not tokens:
+        return
+    execute(
+        "UPDATE t_ai_tool SET use_count = use_count + %s WHERE id = %s",
+        (tokens, work_id),
+    )
 
 
 def _check_vip_permission(user_id: int, tool: dict):
@@ -100,16 +109,19 @@ def chat_completions():
 
     # load persisted character state and inject into system prompt
     character_state = None
+    work_id = None
     if conversation_id:
         conv = query_one(
-            "SELECT character_state FROM t_conversation WHERE id = %s AND is_delete = 0",
+            "SELECT work_id, character_state FROM t_conversation WHERE id = %s AND is_delete = 0",
             (conversation_id,),
         )
-        if conv and conv.get("character_state"):
-            try:
-                character_state = json.loads(conv["character_state"]) if isinstance(conv["character_state"], str) else conv["character_state"]
-            except (json.JSONDecodeError, TypeError):
-                character_state = None
+        if conv:
+            work_id = conv.get("work_id")
+            if conv.get("character_state"):
+                try:
+                    character_state = json.loads(conv["character_state"]) if isinstance(conv["character_state"], str) else conv["character_state"]
+                except (json.JSONDecodeError, TypeError):
+                    character_state = None
 
     if system_prompt:
         if character_state:
@@ -163,6 +175,9 @@ def chat_completions():
                 )
         except Exception:
             pass
+
+    total_tokens = result.get("usage", {}).get("total_tokens", 0)
+    _add_token_usage(work_id, total_tokens)
 
     return success_response(
         {
@@ -229,16 +244,19 @@ def chat_completions_stream():
 
     # load persisted character state from conversation and inject into system prompt
     character_state = None
+    work_id = None
     if conversation_id:
         conv = query_one(
-            "SELECT character_state FROM t_conversation WHERE id = %s AND is_delete = 0",
+            "SELECT work_id, character_state FROM t_conversation WHERE id = %s AND is_delete = 0",
             (conversation_id,),
         )
-        if conv and conv.get("character_state"):
-            try:
-                character_state = json.loads(conv["character_state"]) if isinstance(conv["character_state"], str) else conv["character_state"]
-            except (json.JSONDecodeError, TypeError):
-                character_state = None
+        if conv:
+            work_id = conv.get("work_id")
+            if conv.get("character_state"):
+                try:
+                    character_state = json.loads(conv["character_state"]) if isinstance(conv["character_state"], str) else conv["character_state"]
+                except (json.JSONDecodeError, TypeError):
+                    character_state = None
 
     if system_prompt:
         if character_state:
@@ -274,6 +292,7 @@ def chat_completions_stream():
     full_response = []
 
     def generate():
+        stream_tokens = 0
         try:
             for chunk in service.chat_completion_stream(
                 messages=normalized_messages,
@@ -283,12 +302,23 @@ def chat_completions_stream():
             ):
                 if not chunk:
                     continue
+                # Check for token usage signal embedded at end of stream
+                if TOKEN_USAGE_SIGNAL in chunk:
+                    try:
+                        stream_tokens = int(chunk.split(TOKEN_USAGE_SIGNAL)[1].rstrip("\0"))
+                    except (ValueError, IndexError):
+                        pass
+                    continue
                 full_response.append(chunk)
                 escaped = "\ndata: ".join(chunk.split("\n"))
                 yield f"data: {escaped}\n\n"
         except Exception as e:
             yield f"data: [ERROR] {str(e)}\n\n"
             return
+
+        # Accumulate token usage to the work/character card
+        if stream_tokens:
+            _add_token_usage(work_id, stream_tokens)
 
         # parse and persist character state from the full response
         if conversation_id and full_response:
@@ -364,10 +394,12 @@ def generate(tool_id: int):
 
     prompt = generate_params.get("topic") or generate_params.get("prompt") or str(generate_params)
     ai_result = service.generate_text(prompt, thinking_mode=thinking_mode)
+    answer = ai_result["content"]
+    gen_tokens = ai_result.get("total_tokens", 0)
 
-    output_audit = audit_content(ai_result)
+    output_audit = audit_content(answer)
     if not output_audit["passed"]:
-        ai_result = "[内容审核未通过，结果已拦截]"
+        answer = "[内容审核未通过，结果已拦截]"
 
     record_id = f"record_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{user_id}"
     mongo_db = get_mongo_db()
@@ -378,7 +410,7 @@ def generate(tool_id: int):
             "toolId": tool_id,
             "toolName": tool["name"],
             "params": generate_params,
-            "result": ai_result,
+            "result": answer,
             "status": 1,
             "createTime": datetime.utcnow(),
             "isCollected": 0,
@@ -393,16 +425,16 @@ def generate(tool_id: int):
             audit_id,
             record_id,
             user_id,
-            ai_result[:500] if ai_result else "",
+            answer[:500] if answer else "",
             1,
             1 if output_audit["passed"] else 2,
             datetime.utcnow(),
         ),
     )
 
-    execute("UPDATE t_ai_tool SET use_count = use_count + 1 WHERE id = %s", (tool_id,))
+    execute("UPDATE t_ai_tool SET use_count = use_count + %s WHERE id = %s", (gen_tokens, tool_id))
 
-    return success_response({"result": ai_result, "recordId": record_id})
+    return success_response({"result": answer, "recordId": record_id})
 
 
 @ai_bp.get("/ai/generate/task/<string:task_id>")

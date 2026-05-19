@@ -10,6 +10,7 @@ from .discovery import discovery_bp
 from .home import home_bp
 from .i18n import i18n_bp
 from .monitoring import monitoring_bp
+from .rating import rating_bp
 from .tool import tool_bp
 from .user import user_bp
 
@@ -29,6 +30,7 @@ def register_v1_blueprints(app):
     api_v1.register_blueprint(character_bp)
     api_v1.register_blueprint(chat_bp)
     api_v1.register_blueprint(conv_bp)
+    api_v1.register_blueprint(rating_bp)
 
     from ...services.task_worker import sse_handler
     sse_handler(api_v1)
