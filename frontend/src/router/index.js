@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import CharacterDetailView from '../views/CharacterDetailView.vue'
 import ChatView from '../views/ChatView.vue'
 import ErrorView from '../views/ErrorView.vue'
+import FavoritesView from '../views/FavoritesView.vue'
 import ExploreView from '../views/ExploreView.vue'
 import ForgotPasswordView from '../views/ForgotPasswordView.vue'
 import HomeView from '../views/HomeView.vue'
@@ -22,6 +23,7 @@ const routes = [
   { path: '/chat/:workId', name: 'chat', component: ChatView },
   { path: '/character/:id', name: 'character-detail', component: CharacterDetailView },
   { path: '/usercenter', name: 'user-center', component: UserCenterView, meta: { requiresAuth: true } },
+  { path: '/favorites', name: 'favorites', component: FavoritesView, meta: { requiresAuth: true } },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/register', name: 'register', component: RegisterView },
   { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordView },

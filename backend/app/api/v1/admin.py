@@ -82,16 +82,59 @@ def list_tools():
     total = total_row["total"]
 
     items = query_all(
-        "SELECT id,name,icon,`desc`,use_desc AS useDesc,tag_ids AS tagIds,"
-        "form_config AS formConfig,ai_api AS aiApi,"
-        "is_free AS isFree,is_vip AS isVip,use_count AS useCount,"
-        "sort_order AS sortOrder,status,create_time AS createTime "
-        "FROM t_ai_tool ORDER BY sort_order ASC LIMIT %s OFFSET %s",
+        "SELECT t.id, t.name, t.icon, t.`desc`, t.use_desc AS useDesc,"
+        "t.tag_ids AS tagIds, t.form_config AS formConfig, t.ai_api AS aiApi,"
+        "t.is_free AS isFree, t.is_vip AS isVip, t.use_count AS useCount,"
+        "t.sort_order AS sortOrder, t.status,"
+        "t.create_time AS createTime, t.update_time AS updateTime,"
+        "COALESCE(r.rating_count, 0) AS ratingCount,"
+        "COALESCE(c.conv_count, 0) AS convCount "
+        "FROM t_ai_tool t "
+        "LEFT JOIN ("
+        "  SELECT work_id, COUNT(*) AS rating_count "
+        "  FROM t_rating WHERE work_type = 'tool' GROUP BY work_id"
+        ") r ON r.work_id = t.id "
+        "LEFT JOIN ("
+        "  SELECT work_id, COUNT(*) AS conv_count "
+        "  FROM t_conversation GROUP BY work_id"
+        ") c ON c.work_id = t.id "
+        "ORDER BY t.sort_order ASC LIMIT %s OFFSET %s",
         (page_size, (page_num - 1) * page_size),
     )
     from .tool import _resolve_tag_names
     items = _resolve_tag_names(items)
+    for item in items:
+        _extract_form_config_fields(item)
     return page_response(items, total=total, page_num=page_num, page_size=page_size)
+
+
+def _extract_form_config_fields(item: dict):
+    """Parse form_config JSON and extract structured fields into the item dict."""
+    raw = item.get("formConfig")
+    if not raw:
+        return
+    try:
+        config = json.loads(raw) if isinstance(raw, str) else raw
+    except (json.JSONDecodeError, TypeError):
+        return
+    if not isinstance(config, dict):
+        return
+    item["author"] = config.get("author", "")
+    item["rating"] = config.get("rating", 0)
+    item["detailedIntro"] = config.get("detailedIntro", "")
+    item["characters"] = config.get("characters", [])
+    item["protagonist"] = config.get("protagonist", None)
+    item["worldSetting"] = config.get("worldSetting", None)
+    item["gameRules"] = config.get("gameRules", "")
+    item["statusBar"] = config.get("statusBar", "")
+    item["opening"] = config.get("opening", "")
+    item["writingStyle"] = config.get("writingStyle", None)
+    item["models"] = config.get("models", [])
+    item["sourceId"] = config.get("sourceId", "")
+    item["version"] = config.get("version", "")
+    item["modelConfig"] = config.get("modelConfig", None)
+    item["formStats"] = config.get("stats", None)
+    # Keep formConfig as raw string for the edit dialog
 
 
 @admin_bp.post("/admin/tool")

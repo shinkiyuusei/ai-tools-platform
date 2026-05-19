@@ -87,7 +87,7 @@ def tool_list():
     total_row = query_one(count_sql, tuple(params))
     total = total_row["total"]
 
-    data_sql = f"SELECT id,name,icon,`desc`,tag_ids AS tagIds,use_count AS useCount,is_free AS isFree,is_vip AS isVip,create_time AS createTime,COALESCE(JSON_EXTRACT(form_config, '$.rating'), 0) AS rating FROM t_ai_tool WHERE {where_clause} ORDER BY {order_clause} LIMIT %s OFFSET %s"
+    data_sql = f"SELECT id,name,icon,`desc`,tag_ids AS tagIds,use_count AS useCount,is_free AS isFree,is_vip AS isVip,create_time AS createTime,COALESCE(JSON_EXTRACT(form_config, '$.rating'), 0) AS rating,COALESCE(JSON_EXTRACT(form_config, '$.stats.favorites_count'), 0) AS favoritesCount FROM t_ai_tool WHERE {where_clause} ORDER BY {order_clause} LIMIT %s OFFSET %s"
     params.extend([page_size, (page_num - 1) * page_size])
     items = query_all(data_sql, tuple(params))
     items = _resolve_tag_names(items)
@@ -123,20 +123,81 @@ def tool_detail(tool_id: int):
 def collect_tool():
     user_id = int(get_jwt_identity())
     payload = request.get_json(silent=True) or {}
-    tool_id = payload.get("toolId")
+    tool_id = int(payload.get("toolId", 0))
     if not tool_id:
         from ...core.errors import AppError, ErrorCode
         raise AppError(ErrorCode.PARAM_INVALID, "工具ID不能为空")
 
     from ...extensions import get_mongo_db
+    from ...utils.mysql import execute, query_one as _query_one
     mongo_db = get_mongo_db()
     existing = mongo_db["t_user_collect"].find_one({"userId": user_id, "toolId": tool_id})
     if existing:
         mongo_db["t_user_collect"].delete_one({"userId": user_id, "toolId": tool_id})
-        return success_response({"success": True, "message": "已取消收藏"})
+        execute(
+            "UPDATE t_ai_tool SET form_config = JSON_SET(form_config,"
+            " '$.stats.favorites_count', GREATEST(COALESCE("
+            "  JSON_EXTRACT(form_config, '$.stats.favorites_count'), 0) - 1, 0))"
+            " WHERE id = %s",
+            (tool_id,),
+        )
+        return success_response({"success": True, "message": "已取消收藏", "collected": False})
     else:
         mongo_db["t_user_collect"].insert_one({"userId": user_id, "toolId": tool_id})
-        return success_response({"success": True, "message": "收藏成功"})
+        execute(
+            "UPDATE t_ai_tool SET form_config = JSON_SET(form_config,"
+            " '$.stats.favorites_count', COALESCE("
+            "  JSON_EXTRACT(form_config, '$.stats.favorites_count'), 0) + 1)"
+            " WHERE id = %s",
+            (tool_id,),
+        )
+        return success_response({"success": True, "message": "收藏成功", "collected": True})
+
+
+@tool_bp.get("/user/tool/collect/<int:tool_id>")
+@jwt_required()
+def get_collect_status(tool_id: int):
+    user_id = int(get_jwt_identity())
+    from ...extensions import get_mongo_db
+    mongo_db = get_mongo_db()
+    existing = mongo_db["t_user_collect"].find_one({"userId": user_id, "toolId": tool_id})
+    return success_response({"collected": bool(existing)})
+
+
+@tool_bp.get("/user/tool/collected")
+@jwt_required()
+def list_collected_tools():
+    user_id = int(get_jwt_identity())
+    page_num = int(request.args.get("pageNum", 1))
+    page_size = min(int(request.args.get("pageSize", 12)), 50)
+
+    from ...extensions import get_mongo_db
+    mongo_db = get_mongo_db()
+    total = mongo_db["t_user_collect"].count_documents({"userId": user_id})
+    cursor = (
+        mongo_db["t_user_collect"]
+        .find({"userId": user_id})
+        .sort("_id", -1)
+        .skip((page_num - 1) * page_size)
+        .limit(page_size)
+    )
+    tool_ids = [doc["toolId"] for doc in cursor]
+    if not tool_ids:
+        return page_response([], total=0, page_num=page_num, page_size=page_size)
+
+    placeholders = ",".join(["%s"] * len(tool_ids))
+    items = query_all(
+        f"SELECT id,name,icon,`desc`,use_count AS useCount,"
+        f"is_free AS isFree,is_vip AS isVip,"
+        f"COALESCE(JSON_EXTRACT(form_config, '$.stats.favorites_count'), 0) AS favoritesCount,"
+        f"COALESCE(JSON_EXTRACT(form_config, '$.rating'), 0) AS rating "
+        f"FROM t_ai_tool WHERE id IN ({placeholders}) AND status = 1",
+        tuple(tool_ids),
+    )
+    # Preserve MongoDB order
+    order_map = {item["id"]: item for item in items}
+    ordered = [order_map[tid] for tid in tool_ids if tid in order_map]
+    return page_response(ordered, total=total, page_num=page_num, page_size=page_size)
 
 
 @tool_bp.get("/user/tool/recent")

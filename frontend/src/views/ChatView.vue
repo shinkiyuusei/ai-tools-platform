@@ -2,6 +2,7 @@
 import { ref, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { chatApi, conversationApi } from '../api/chat'
+import { collectTool, getCollectedStatus } from '../api/user'
 import AppLayout from '../layouts/AppLayout.vue'
 import StarRating from '../components/StarRating.vue'
 import { formatTokens } from '../utils/format'
@@ -24,6 +25,23 @@ const sceneContext = ref(null)
 const selectedPerspectiveKey = ref('')
 const perspectiveOptions = ref([])
 const switchingPerspective = ref(false)
+const favorited = ref(false)
+
+const checkFavoriteStatus = async () => {
+  try {
+    const res = await getCollectedStatus(workId)
+    favorited.value = res.data.collected
+  } catch { /* ignore */ }
+}
+
+const toggleFavorite = async () => {
+  try {
+    const res = await collectTool(workId)
+    favorited.value = res.data.collected
+  } catch {
+    // silently fail
+  }
+}
 
 const models = [
   { key: 'deepseek-v4-flash', label: 'DeepSeek Flash' },
@@ -312,6 +330,7 @@ const deleteConversation = async (convId) => {
 
 onMounted(async () => {
   await loadWork()
+  checkFavoriteStatus()
   if (work.value) {
     await loadConversationList()
     if (conversationList.value.length > 0) {
@@ -407,9 +426,14 @@ onMounted(async () => {
       <aside class="chat-sidebar">
         <!-- Work Info -->
         <div class="sb-card sb-work-info">
-          <div class="sb-cover">
-            <img v-if="work.icon && work.icon.startsWith('http')" :src="work.icon" :alt="work.name" />
-            <span v-else class="cover-placeholder">{{ work.name.slice(0, 2) }}</span>
+          <div class="sb-cover-wrap">
+            <div class="sb-cover">
+              <img v-if="work.icon && work.icon.startsWith('http')" :src="work.icon" :alt="work.name" />
+              <span v-else class="cover-placeholder">{{ work.name.slice(0, 2) }}</span>
+            </div>
+            <button class="fav-heart-btn" :class="{ favorited }" @click.stop="toggleFavorite" :title="favorited ? '取消收藏' : '收藏'">
+              {{ favorited ? '♥' : '♡' }}
+            </button>
           </div>
           <h2 class="sb-name">{{ work.name }}</h2>
           <p class="sb-desc">{{ work.desc }}</p>
@@ -787,13 +811,17 @@ onMounted(async () => {
   padding: var(--space-lg) var(--space-md);
 }
 
+.sb-cover-wrap {
+  position: relative;
+  margin-bottom: var(--space-sm);
+}
+
 .sb-cover {
-  width: 64px;
-  height: 64px;
+  width: 96px;
+  height: 96px;
   border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--bg-tertiary);
-  margin-bottom: var(--space-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -805,6 +833,35 @@ onMounted(async () => {
   font-size: 20px;
   color: var(--text-tertiary);
   opacity: 0.5;
+}
+
+.fav-heart-btn {
+  position: absolute;
+  top: -8px;
+  right: -30px;
+  width: 42px;
+  height: 42px;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  z-index: 1;
+}
+
+.fav-heart-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--color-crimson-soft);
+}
+
+.fav-heart-btn.favorited {
+  color: var(--color-crimson-soft);
+  background: rgba(200, 85, 84, 0.2);
 }
 
 .sb-name {

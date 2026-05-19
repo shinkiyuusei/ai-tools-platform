@@ -6,7 +6,7 @@ import { characterApi } from '../api/character'
 import BaseInput from '../components/base/BaseInput.vue'
 import BasePagination from '../components/base/BasePagination.vue'
 import AppLayout from '../layouts/AppLayout.vue'
-import { formatTokens, formatScore } from '../utils/format'
+import { formatTokens, formatHot, formatScore } from '../utils/format'
 
 const { t } = useI18n()
 
@@ -109,6 +109,7 @@ const fetchList = async () => {
           useCount: tokens,
           likeCount: likes,
           collectCount: item.collect_count || 0,
+          favoritesCount: item.favorites_count || item.collect_count || 0,
           isFree: true,
           isVip: false,
           createTime: item.create_time,
@@ -241,8 +242,8 @@ onMounted(fetchList)
               {{ { gold: '金', silver: '银', bronze: '铜' }[item.honorTier] }}
             </span>
             <div class="rating-overlay">
-              <span class="rating-star">★</span>
-              <span class="rating-score">{{ formatScore(item) }}</span>
+              <span class="favorite-heart">♥</span>
+              <span class="favorite-count">{{ formatHot(item.favoritesCount) }}</span>
             </div>
           </div>
           <div class="card-body">
@@ -700,11 +701,11 @@ onMounted(fetchList)
   align-items: center;
   gap: 3px;
 }
-.rating-star {
-  color: var(--color-candy-pink);
+.favorite-heart {
+  color: var(--color-crimson-soft);
   font-size: var(--text-xs);
 }
-.rating-score {
+.favorite-count {
   color: var(--text-primary);
   font-size: var(--text-xs);
   font-weight: 700;

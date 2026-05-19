@@ -15,6 +15,7 @@ const menuList = [
   { to: '/explore', label: '发现', desc: '发现故事', icon: '◇', color: 'misty' },
   { to: '/create', label: '创作', desc: 'AI 写作', icon: '◇', color: 'crimson' },
   { to: '/usercenter', label: '我的', desc: '个人中心', icon: '◇', color: 'green' },
+  { to: '/favorites', label: '我的收藏', desc: '收藏作品', icon: '♥', color: 'crimson' },
 ]
 
 const adminMenuList = [
