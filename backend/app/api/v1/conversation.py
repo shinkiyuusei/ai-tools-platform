@@ -22,31 +22,42 @@ def _get_user_id():
 @conv_bp.post("/conversation")
 def create():
     user_id = _get_user_id()
+    # Some clients may send content-type that causes get_json to fail silently;
+    # fall back to raw body parsing
     payload = request.get_json(silent=True) or {}
-    work_id = int(payload.get("workId", 0))
+    if not payload:
+        raw = request.get_data(as_text=True)
+        if raw:
+            import json as _json
+            try:
+                payload = _json.loads(raw)
+            except Exception:
+                payload = {}
+    entity_id = int(payload.get("entityId", 0) or payload.get("workId", 0))
+    entity_type = (payload.get("entityType") or "work").strip()
     title = (payload.get("title") or "").strip()[:100]
 
     if not title:
         row = query_one(
-            "SELECT COUNT(1) AS cnt FROM t_conversation WHERE user_id = %s AND work_id = %s AND is_delete = 0",
-            (user_id, work_id),
+            "SELECT COUNT(1) AS cnt FROM t_conversation WHERE user_id = %s AND entity_id = %s AND entity_type = %s AND is_delete = 0",
+            (user_id, entity_id, entity_type),
         )
         title = f"新对话{(row['cnt'] if row else 0) + 1}"
 
     conv_id = generate_id()
     execute(
-        "INSERT INTO t_conversation (id, user_id, work_id, title) VALUES (%s,%s,%s,%s)",
-        (conv_id, user_id, work_id, title),
+        "INSERT INTO t_conversation (id, user_id, entity_id, entity_type, title) VALUES (%s,%s,%s,%s,%s)",
+        (conv_id, user_id, entity_id, entity_type, title),
     )
     return success_response(
-        {"id": conv_id, "workId": work_id, "title": title, "createTime": datetime.utcnow().isoformat()}
+        {"id": conv_id, "entityId": entity_id, "entityType": entity_type, "title": title, "createTime": datetime.utcnow().isoformat()}
     )
 
 
 @conv_bp.get("/conversation/<int:conv_id>")
 def detail(conv_id: int):
     conv = query_one(
-        "SELECT id, user_id, work_id, title, message_count, create_time, update_time "
+        "SELECT id, user_id, entity_id, entity_type, title, message_count, create_time, update_time "
         "FROM t_conversation WHERE id = %s AND is_delete = 0",
         (conv_id,),
     )
@@ -60,7 +71,8 @@ def detail(conv_id: int):
         {
             "id": conv["id"],
             "userId": conv["user_id"],
-            "workId": conv["work_id"],
+            "entityId": conv["entity_id"],
+            "entityType": conv["entity_type"],
             "title": conv["title"],
             "messageCount": conv["message_count"],
             "createTime": conv["create_time"].isoformat() if hasattr(conv["create_time"], "isoformat") else str(conv["create_time"]),
@@ -111,7 +123,8 @@ def add_messages(conv_id: int):
 @conv_bp.get("/conversations")
 def list_conversations():
     user_id = _get_user_id()
-    work_id = request.args.get("workId", type=int, default=0)
+    entity_id = request.args.get("entityId", type=int, default=0)
+    entity_type = request.args.get("entityType", type=str, default="work")
     page = request.args.get("pageNum", type=int, default=1)
     page_size = min(request.args.get("pageSize", type=int, default=20), 50)
 
@@ -120,16 +133,19 @@ def list_conversations():
     if user_id:
         where += " AND user_id = %s"
         params.append(user_id)
-    if work_id:
-        where += " AND work_id = %s"
-        params.append(work_id)
+    if entity_id:
+        where += " AND entity_id = %s"
+        params.append(entity_id)
+    if entity_type:
+        where += " AND entity_type = %s"
+        params.append(entity_type)
 
     offset = (page - 1) * page_size
     total_row = query_one(f"SELECT COUNT(1) AS cnt FROM t_conversation WHERE {where}", tuple(params))
     total = total_row["cnt"] if total_row else 0
 
     rows = query_all(
-        f"SELECT id, user_id, work_id, title, message_count, create_time, update_time "
+        f"SELECT id, user_id, entity_id, entity_type, title, message_count, create_time, update_time "
         f"FROM t_conversation WHERE {where} ORDER BY update_time DESC LIMIT %s OFFSET %s",
         tuple(params + [page_size, offset]),
     )
@@ -139,7 +155,8 @@ def list_conversations():
         lst.append(
             {
                 "id": r["id"],
-                "workId": r["work_id"],
+                "entityId": r["entity_id"],
+                "entityType": r["entity_type"],
                 "title": r["title"],
                 "messageCount": r["message_count"],
                 "createTime": r["create_time"].isoformat() if hasattr(r["create_time"], "isoformat") else str(r["create_time"]),

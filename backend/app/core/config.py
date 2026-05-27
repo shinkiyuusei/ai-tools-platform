@@ -11,8 +11,8 @@ load_dotenv(Path(__file__).resolve().parents[3] / ".env", override=True)
 @dataclass
 class BaseConfig:
     DEBUG: bool = os.getenv("FLASK_ENV", "development") == "development"
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "change-me-secret")
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me-jwt-secret")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
     JWT_ACCESS_TOKEN_EXPIRES: int = 60 * 60 * 24
     API_PREFIX: str = os.getenv("API_PREFIX", "/api/v1")
     
@@ -22,7 +22,6 @@ class BaseConfig:
     SUPPORTED_LANGUAGES: list = None
 
     MYSQL_CONFIG: dict = None
-    MONGO_URI: str = ""
     REDIS_URL: str = ""
     DEEPSEEK_CONFIG: dict = None
 
@@ -37,15 +36,6 @@ class BaseConfig:
             "cursorclass": None,
             "autocommit": True,
         }
-        mongo_user = os.getenv("MONGO_DB_USERNAME", "root")
-        mongo_password = os.getenv("MONGO_DB_PASSWORD", "root123456")
-        mongo_host = os.getenv("MONGO_HOST", "127.0.0.1")
-        mongo_port = os.getenv("MONGO_DB_PORT", "27017")
-        mongo_db = os.getenv("MONGO_DB_NAME", "ai_tools_platform")
-        self.MONGO_URI = (
-            f"mongodb://{mongo_user}:{mongo_password}@{mongo_host}:{mongo_port}/{mongo_db}"
-            "?authSource=admin"
-        )
         redis_password = os.getenv("REDIS_PASSWORD", "redis123456")
         redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
         redis_port = os.getenv("REDIS_DB_PORT", "6379")

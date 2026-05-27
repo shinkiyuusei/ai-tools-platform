@@ -22,12 +22,12 @@ INSERT IGNORE INTO t_tag (id, name, sort_order) VALUES
 -- 如需恢复，请使用正确编码重新插入
 
 -- 会员权益种子数据
-INSERT INTO t_vip_rights (vip_level, free_tool, all_tool, free_count, concurrency_limit, ad_free, priority_generate) VALUES
+INSERT INTO t_vip_rights (vip_level, free_tool, all_tool, credits, concurrency_limit, ad_free, priority_generate) VALUES
 (0, 1, 0, 10, 1, 0, 0),
 (1, 1, 1, 0, 5, 1, 0),
 (2, 1, 1, 0, 0, 1, 1);
 
 -- 演示用户 (密码: Test123456)
 -- bcrypt hash for "Test123456"
-INSERT INTO t_user (id, phone, email, password, nickname, avatar, vip_level, vip_expire_time, free_count, status) VALUES
+INSERT INTO t_user (id, phone, email, password, nickname, avatar, vip_level, vip_expire_time, credits, status) VALUES
 (1000000000000001, '13800000000', 'demo@example.com', '$2b$12$LJ3m4ys3Gy4e1Zq8wHkDZOxhBqEkqRQVF.r4YkCFkQI8PqMBYGgv6', '演示用户', '', 0, NULL, 10, 1);

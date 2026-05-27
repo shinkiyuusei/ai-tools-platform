@@ -23,13 +23,12 @@ CREATE TABLE IF NOT EXISTS t_user (
   avatar VARCHAR(255) NOT NULL DEFAULT '',
   vip_level TINYINT NOT NULL DEFAULT 0,
   vip_expire_time DATETIME NULL,
-  free_count INT NOT NULL DEFAULT 10,
+  credits INT NOT NULL DEFAULT 500,
   status TINYINT NOT NULL DEFAULT 1,
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   is_delete TINYINT NOT NULL DEFAULT 0,
   UNIQUE KEY uk_phone (phone),
-  UNIQUE KEY uk_email (email),
   INDEX idx_status (status),
   INDEX idx_vip_level (vip_level)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -40,32 +39,11 @@ CREATE TABLE IF NOT EXISTS t_vip_rights (
   vip_level TINYINT NOT NULL,
   free_tool TINYINT NOT NULL DEFAULT 1,
   all_tool TINYINT NOT NULL DEFAULT 0,
-  free_count INT NOT NULL DEFAULT 10,
+  credits INT NOT NULL DEFAULT 500,
   concurrency_limit INT NOT NULL DEFAULT 1,
   ad_free TINYINT NOT NULL DEFAULT 0,
   priority_generate TINYINT NOT NULL DEFAULT 0,
   UNIQUE KEY uk_vip_level (vip_level)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- AI工具表
-CREATE TABLE IF NOT EXISTS t_ai_tool (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(50) NOT NULL,
-  icon VARCHAR(255) NOT NULL DEFAULT '',
-  `desc` VARCHAR(200) NOT NULL DEFAULT '',
-  use_desc TEXT,
-  tag_ids VARCHAR(100) NOT NULL DEFAULT '',
-  form_config TEXT,
-  ai_api VARCHAR(255) NOT NULL DEFAULT '',
-  is_free TINYINT NOT NULL DEFAULT 1,
-  is_vip TINYINT NOT NULL DEFAULT 0,
-  use_count BIGINT NOT NULL DEFAULT 0,
-  sort_order INT NOT NULL DEFAULT 0,
-  status TINYINT NOT NULL DEFAULT 1,
-  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_status (status),
-  INDEX idx_use_count (use_count)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 审核记录表
@@ -88,23 +66,26 @@ CREATE TABLE IF NOT EXISTS t_audit_record (
 CREATE TABLE IF NOT EXISTS t_character_card (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id BIGINT NOT NULL,
-  name VARCHAR(100) NOT NULL,
+  name VARCHAR(100) NOT NULL DEFAULT '',
+  `desc` VARCHAR(500) NOT NULL DEFAULT '',
   avatar VARCHAR(500) NOT NULL DEFAULT '',
-  description TEXT NOT NULL,
-  personality TEXT NOT NULL,
-  background TEXT NOT NULL,
-  tags VARCHAR(500) NOT NULL DEFAULT '',
+  author VARCHAR(100) NOT NULL DEFAULT '',
+  language VARCHAR(10) NOT NULL DEFAULT 'zh-Hans',
+  category INT NOT NULL DEFAULT 0,
+  tags JSON,
+  persona_content TEXT NOT NULL,
   is_public TINYINT NOT NULL DEFAULT 1,
-  is_vip TINYINT NOT NULL DEFAULT 0,
   like_count INT NOT NULL DEFAULT 0,
   view_count BIGINT NOT NULL DEFAULT 0,
   collect_count INT NOT NULL DEFAULT 0,
+  use_count BIGINT NOT NULL DEFAULT 0,
   status TINYINT NOT NULL DEFAULT 1,
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_user_id (user_id),
   INDEX idx_status (status),
   INDEX idx_like_count (like_count),
+  INDEX idx_category (category),
   INDEX idx_create_time (create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -128,4 +109,67 @@ CREATE TABLE IF NOT EXISTS t_character_like (
   UNIQUE KEY uk_user_character (user_id, character_id),
   INDEX idx_user_id (user_id),
   INDEX idx_character_id (character_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 作品卡表
+CREATE TABLE IF NOT EXISTS t_work_card (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL DEFAULT 0,
+  name VARCHAR(100) NOT NULL DEFAULT '',
+  `desc` VARCHAR(500) NOT NULL DEFAULT '',
+  cover VARCHAR(500) NOT NULL DEFAULT '',
+  author VARCHAR(100) NOT NULL DEFAULT '',
+  language VARCHAR(10) NOT NULL DEFAULT 'zh-Hans',
+  category INT NOT NULL DEFAULT 0,
+  summary TEXT,
+  opening TEXT,
+  openings JSON,
+  tags JSON,
+  role_config JSON NOT NULL,
+  use_count BIGINT NOT NULL DEFAULT 0,
+  status TINYINT NOT NULL DEFAULT 1,
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_user_id (user_id),
+  INDEX idx_status (status),
+  INDEX idx_use_count (use_count),
+  INDEX idx_category (category),
+  INDEX idx_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 作品收藏表
+CREATE TABLE IF NOT EXISTS t_work_collect (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  work_id BIGINT NOT NULL,
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_user_work (user_id, work_id),
+  INDEX idx_work_id (work_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 对话会话表
+CREATE TABLE IF NOT EXISTS t_conversation (
+  id BIGINT NOT NULL PRIMARY KEY,
+  user_id BIGINT NOT NULL DEFAULT 0,
+  entity_id BIGINT NOT NULL DEFAULT 0,
+  entity_type VARCHAR(20) NOT NULL DEFAULT 'work',
+  title VARCHAR(100) NOT NULL DEFAULT '',
+  message_count INT NOT NULL DEFAULT 0,
+  character_state JSON DEFAULT NULL,
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  is_delete TINYINT NOT NULL DEFAULT 0,
+  INDEX idx_conv_user (user_id),
+  INDEX idx_conv_entity (entity_id),
+  INDEX idx_conv_user_entity (user_id, entity_id, entity_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 对话消息表
+CREATE TABLE IF NOT EXISTS t_message (
+  id BIGINT NOT NULL PRIMARY KEY,
+  conversation_id BIGINT NOT NULL,
+  role VARCHAR(10) NOT NULL,
+  content TEXT NOT NULL,
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_msg_conv (conversation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

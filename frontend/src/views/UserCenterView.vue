@@ -1,27 +1,20 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { getToolList } from '../api/tool'
-import { collectRecord, getRecordList, getUserInfo, updateUserInfo } from '../api/user'
+import { getUserInfo, updateUserInfo } from '../api/user'
 import { useAuthStore } from '../stores/auth'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
-import BasePagination from '../components/base/BasePagination.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 
 const auth = useAuthStore()
 
-const activeMenu = ref('history')
+const activeMenu = ref('account')
 const user = ref({ nickname: '', avatar: '', vipLevel: 0, vipExpireTime: null, phone: '', email: '' })
-const records = ref({ list: [], total: 0, pageNum: 1, pageSize: 10 })
-const recentTools = ref({ list: [], total: 0 })
 const editForm = ref({ nickname: '', avatar: '' })
-const recordLoading = ref(false)
 const saveLoading = ref(false)
 
 const menuItems = [
-  { key: 'history', label: '创作历史', icon: '📜' },
   { key: 'favorites', label: '我的收藏', icon: '♥' },
-  { key: 'recent', label: '最近使用', icon: '🕐' },
   { key: 'account', label: '账号设置', icon: '⚙' },
   { key: 'security', label: '安全中心', icon: '🔒' },
 ]
@@ -32,38 +25,6 @@ const fetchUserInfo = async () => {
     user.value = res.data
     auth.updateUserInfo(res.data)
     editForm.value = { nickname: res.data.nickname || '', avatar: res.data.avatar || '' }
-  } catch {}
-}
-
-const fetchRecords = async () => {
-  recordLoading.value = true
-  try {
-    const res = await getRecordList({ pageNum: records.value.pageNum, pageSize: records.value.pageSize })
-    records.value.list = res.data.list
-    records.value.total = res.data.total
-    records.value.pageNum = res.data.pageNum
-    records.value.pageSize = res.data.pageSize
-  } finally {
-    recordLoading.value = false
-  }
-}
-
-const fetchRecentTools = async () => {
-  try {
-    const res = await getToolList({ pageSize: 20 })
-    recentTools.value = res.data
-  } catch {}
-}
-
-const handleRecordPageChange = (page) => {
-  records.value.pageNum = page
-  fetchRecords()
-}
-
-const handleCollect = async (recordId) => {
-  try {
-    await collectRecord(recordId)
-    fetchRecords()
   } catch {}
 }
 
@@ -84,13 +45,10 @@ const handleSaveInfo = async () => {
 
 const switchMenu = (key) => {
   activeMenu.value = key
-  if (key === 'history') fetchRecords()
-  if (key === 'recent') fetchRecentTools()
 }
 
 onMounted(async () => {
   await fetchUserInfo()
-  fetchRecords()
 })
 </script>
 
@@ -104,12 +62,8 @@ onMounted(async () => {
           <span class="vip-badge">创作者</span>
           <div class="profile-stats">
             <div class="pstat">
-              <span class="pstat-value">{{ records.total }}</span>
-              <span class="pstat-label">作品</span>
-            </div>
-            <div class="pstat">
-              <span class="pstat-value">{{ recentTools.total }}</span>
-              <span class="pstat-label">工具</span>
+              <span class="pstat-value">{{ user.vipLevel >= 1 ? '会员' : '免费' }}</span>
+              <span class="pstat-label">状态</span>
             </div>
           </div>
         </div>
@@ -132,62 +86,13 @@ onMounted(async () => {
             <h1>{{ menuItems.find(m => m.key === activeMenu)?.label }}</h1>
           </div>
 
-          <template v-if="activeMenu === 'history'">
-            <div v-if="recordLoading" class="skeleton-list">
-              <div v-for="n in 5" :key="n" class="skeleton-item"></div>
-            </div>
-            <div v-else-if="records.list.length === 0" class="empty">
-              <div class="empty-icon">◇</div>
-              <p>暂无创作记录</p>
-            </div>
-            <div v-else class="record-list">
-              <div v-for="item in records.list" :key="item.recordId" class="record-item">
-                <div class="record-info">
-                  <div class="record-header">
-                    <span class="tool-name">{{ item.toolName }}</span>
-                    <span :class="['status', item.status === 1 ? 'success' : 'pending']">
-                      {{ item.status === 1 ? '已完成' : '生成中' }}
-                    </span>
-                  </div>
-                  <span class="record-time">{{ item.createTime }}</span>
-                </div>
-                <div class="record-result" v-if="item.result">
-                  {{ item.result.slice(0, 200) }}{{ item.result.length > 200 ? '…' : '' }}
-                </div>
-                <div class="record-actions">
-                  <button class="collect-btn" @click="handleCollect(item.recordId)">
-                    {{ item.isCollected ? '♥ 已收藏' : '♡ 收藏' }}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <BasePagination
-              v-if="records.total > 0"
-              :page-num="records.pageNum"
-              :page-size="records.pageSize"
-              :total="records.total"
-              @update:page-num="handleRecordPageChange"
-            />
-          </template>
-
           <template v-if="activeMenu === 'favorites'">
             <div class="empty">
               <div class="empty-icon">♥</div>
-              <p>收藏功能开发中</p>
-              <p class="empty-hint">通过历史记录可以收藏喜欢的创作</p>
-            </div>
-          </template>
-
-          <template v-if="activeMenu === 'recent'">
-            <div v-if="recentTools.list.length === 0" class="empty">
-              <div class="empty-icon">🕐</div>
-              <p>暂无最近使用记录</p>
-            </div>
-            <div v-else class="simple-list">
-              <div v-for="item in recentTools.list" :key="item.id" class="simple-item">
-                <span class="simple-name">{{ item.name }}</span>
-                <span class="simple-time">{{ item.lastUseTime }}</span>
-              </div>
+              <p>前往收藏页面查看收藏的作品</p>
+              <p class="empty-hint">
+                <router-link to="/favorites">→ 我的收藏</router-link>
+              </p>
             </div>
           </template>
 

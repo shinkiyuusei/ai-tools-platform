@@ -7,9 +7,13 @@ from ...core.errors import AppError, ErrorCode
 from ...utils.crud import dynamic_update
 from ...utils.mysql import execute, query_all, query_one
 from ...utils.response import page_response, success_response
-from ...utils.snowflake import generate_id
 
 admin_bp = Blueprint("admin", __name__)
+
+
+def _parse_json_col(col):
+    """Parse a JSON column that may be returned as a string from PyMySQL."""
+    return json.loads(col) if isinstance(col, str) else col
 
 
 def _check_admin(user_id: int):
@@ -69,163 +73,6 @@ def delete_tag(tag_id: int):
     return success_response({"message": "删除成功"})
 
 
-@admin_bp.get("/admin/tool")
-@jwt_required()
-def list_tools():
-    user_id = int(get_jwt_identity())
-    _check_admin(user_id)
-
-    page_num = int(request.args.get("pageNum", 1))
-    page_size = min(int(request.args.get("pageSize", 10)), 50)
-
-    total_row = query_one("SELECT COUNT(*) AS total FROM t_ai_tool", ())
-    total = total_row["total"]
-
-    items = query_all(
-        "SELECT t.id, t.name, t.icon, t.`desc`, t.use_desc AS useDesc,"
-        "t.tag_ids AS tagIds, t.form_config AS formConfig, t.ai_api AS aiApi,"
-        "t.is_free AS isFree, t.is_vip AS isVip, t.use_count AS useCount,"
-        "t.sort_order AS sortOrder, t.status,"
-        "t.create_time AS createTime, t.update_time AS updateTime,"
-        "COALESCE(r.rating_count, 0) AS ratingCount,"
-        "COALESCE(c.conv_count, 0) AS convCount "
-        "FROM t_ai_tool t "
-        "LEFT JOIN ("
-        "  SELECT work_id, COUNT(*) AS rating_count "
-        "  FROM t_rating WHERE work_type = 'tool' GROUP BY work_id"
-        ") r ON r.work_id = t.id "
-        "LEFT JOIN ("
-        "  SELECT work_id, COUNT(*) AS conv_count "
-        "  FROM t_conversation GROUP BY work_id"
-        ") c ON c.work_id = t.id "
-        "ORDER BY t.sort_order ASC LIMIT %s OFFSET %s",
-        (page_size, (page_num - 1) * page_size),
-    )
-    from .tool import _resolve_tag_names
-    items = _resolve_tag_names(items)
-    for item in items:
-        _extract_form_config_fields(item)
-    return page_response(items, total=total, page_num=page_num, page_size=page_size)
-
-
-def _extract_form_config_fields(item: dict):
-    """Parse form_config JSON and extract structured fields into the item dict."""
-    raw = item.get("formConfig")
-    if not raw:
-        return
-    try:
-        config = json.loads(raw) if isinstance(raw, str) else raw
-    except (json.JSONDecodeError, TypeError):
-        return
-    if not isinstance(config, dict):
-        return
-    item["author"] = config.get("author", "")
-    item["rating"] = config.get("rating", 0)
-    item["detailedIntro"] = config.get("detailedIntro", "")
-    item["characters"] = config.get("characters", [])
-    item["protagonist"] = config.get("protagonist", None)
-    item["worldSetting"] = config.get("worldSetting", None)
-    item["gameRules"] = config.get("gameRules", "")
-    item["statusBar"] = config.get("statusBar", "")
-    item["opening"] = config.get("opening", "")
-    item["writingStyle"] = config.get("writingStyle", None)
-    item["models"] = config.get("models", [])
-    item["sourceId"] = config.get("sourceId", "")
-    item["version"] = config.get("version", "")
-    item["modelConfig"] = config.get("modelConfig", None)
-    item["formStats"] = config.get("stats", None)
-    # Keep formConfig as raw string for the edit dialog
-
-
-@admin_bp.post("/admin/tool")
-@jwt_required()
-def create_tool():
-    user_id = int(get_jwt_identity())
-    _check_admin(user_id)
-
-    payload = request.get_json(silent=True) or {}
-    name = payload.get("name", "")
-    if not name:
-        raise AppError(ErrorCode.PARAM_INVALID, "工具名称不能为空")
-
-    form_config = payload.get("formConfig", {})
-    if isinstance(form_config, (list, dict)):
-        form_config = json.dumps(form_config, ensure_ascii=False)
-
-    tool_id = execute(
-        "INSERT INTO t_ai_tool (name,icon,`desc`,use_desc,tag_ids,form_config,ai_api,"
-        "is_free,is_vip,use_count,sort_order,status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        (
-            name,
-            payload.get("icon", ""),
-            payload.get("desc", ""),
-            payload.get("useDesc", ""),
-            payload.get("tagIds", ""),
-            form_config,
-            payload.get("aiApi", "deepseek"),
-            payload.get("isFree", 1),
-            payload.get("isVip", 0),
-            0,
-            payload.get("sortOrder", 0),
-            payload.get("status", 1),
-        ),
-    )
-    return success_response({"id": tool_id, "message": "创建成功"})
-
-
-@admin_bp.put("/admin/tool/<int:tool_id>")
-@jwt_required()
-def update_tool(tool_id: int):
-    user_id = int(get_jwt_identity())
-    _check_admin(user_id)
-
-    payload = request.get_json(silent=True) or {}
-    field_map = {
-        "name": "name",
-        "icon": "icon",
-        "desc": "desc",
-        "useDesc": "use_desc",
-        "tagIds": "tag_ids",
-        "aiApi": "ai_api",
-        "isFree": "is_free",
-        "isVip": "is_vip",
-        "sortOrder": "sort_order",
-        "status": "status",
-    }
-    fields = []
-    params = []
-    for json_key, db_key in field_map.items():
-        val = payload.get(json_key)
-        if val is not None:
-            if json_key == "desc":
-                fields.append(f"`{db_key}` = %s")
-            else:
-                fields.append(f"{db_key} = %s")
-            params.append(val)
-
-    if "formConfig" in payload:
-        fields.append("form_config = %s")
-        fc = payload["formConfig"]
-        params.append(json.dumps(fc, ensure_ascii=False) if isinstance(fc, (list, dict)) else fc)
-
-    if not fields:
-        raise AppError(ErrorCode.PARAM_INVALID, "没有需要修改的内容")
-
-    params.append(tool_id)
-    execute(f"UPDATE t_ai_tool SET {', '.join(fields)} WHERE id = %s", tuple(params))
-    return success_response({"message": "更新成功"})
-
-
-@admin_bp.delete("/admin/tool/<int:tool_id>")
-@jwt_required()
-def delete_tool(tool_id: int):
-    user_id = int(get_jwt_identity())
-    _check_admin(user_id)
-
-    execute("DELETE FROM t_ai_tool WHERE id = %s", (tool_id,))
-    return success_response({"message": "删除成功"})
-
-
 # ---- Character Card Management ----
 
 @admin_bp.get("/admin/character")
@@ -241,7 +88,7 @@ def list_characters_admin():
     where = ["1=1"]
     params = []
     if keyword:
-        where.append("(name LIKE %s OR description LIKE %s)")
+        where.append("(name LIKE %s OR `desc` LIKE %s)")
         params.extend([f"%{keyword}%", f"%{keyword}%"])
 
     where_clause = " AND ".join(where)
@@ -249,10 +96,10 @@ def list_characters_admin():
     total = total_row["total"]
 
     items = query_all(
-        f"SELECT id, user_id AS userId, name, avatar, description, personality, background, tags, "
-        f"is_public AS isPublic, is_vip AS isVip, "
+        f"SELECT id, user_id AS userId, name, `desc`, avatar, author, tags, "
+        f"is_public AS isPublic, "
         f"like_count AS likeCount, view_count AS viewCount, collect_count AS collectCount, "
-        f"status, create_time AS createTime "
+        f"use_count AS useCount, status, create_time AS createTime "
         f"FROM t_character_card WHERE {where_clause} "
         f"ORDER BY create_time DESC LIMIT %s OFFSET %s",
         tuple(params + [page_size, (page_num - 1) * page_size]),
@@ -267,10 +114,10 @@ def get_character_admin(char_id: int):
     _check_admin(user_id)
 
     char = query_one(
-        "SELECT id, user_id AS userId, name, avatar, description, personality, background, tags, "
-        "is_public AS isPublic, is_vip AS isVip, "
+        "SELECT id, user_id AS userId, name, `desc`, avatar, author, language, category, tags, "
+        "persona_content AS personaContent, is_public AS isPublic, "
         "like_count AS likeCount, view_count AS viewCount, collect_count AS collectCount, "
-        "status, create_time AS createTime "
+        "use_count AS useCount, status, create_time AS createTime "
         "FROM t_character_card WHERE id = %s",
         (char_id,),
     )
@@ -288,17 +135,19 @@ def update_character_admin(char_id: int):
     payload = request.get_json(silent=True) or {}
     field_map = {
         "name": "name",
+        "desc": "desc",
         "avatar": "avatar",
-        "description": "description",
-        "personality": "personality",
-        "background": "background",
+        "author": "author",
+        "language": "language",
+        "category": "category",
         "tags": "tags",
+        "personaContent": "persona_content",
         "isPublic": "is_public",
-        "isVip": "is_vip",
         "status": "status",
         "likeCount": "like_count",
         "viewCount": "view_count",
         "collectCount": "collect_count",
+        "useCount": "use_count",
     }
     dynamic_update("t_character_card", field_map, payload, "id", char_id)
     return success_response({"message": "更新成功"})
@@ -310,5 +159,187 @@ def delete_character_admin(char_id: int):
     user_id = int(get_jwt_identity())
     _check_admin(user_id)
 
-    execute("UPDATE t_character_card SET status = 0 WHERE id = %s", (char_id,))
+    execute("DELETE FROM t_character_collect WHERE character_id = %s", (char_id,))
+    execute("DELETE FROM t_character_like WHERE character_id = %s", (char_id,))
+    execute("DELETE FROM t_character_card WHERE id = %s", (char_id,))
+    return success_response({"message": "删除成功"})
+
+
+# ---- Work Card Management ----
+
+@admin_bp.get("/admin/work")
+@jwt_required()
+def list_works_admin():
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    page_num = int(request.args.get("pageNum", 1))
+    page_size = min(int(request.args.get("pageSize", 10)), 50)
+    keyword = request.args.get("keyword", "")
+
+    where = ["status != 0"]
+    params = []
+    if keyword:
+        where.append("(name LIKE %s OR `desc` LIKE %s)")
+        params.extend([f"%{keyword}%", f"%{keyword}%"])
+
+    where_clause = " AND ".join(where)
+    total_row = query_one(f"SELECT COUNT(*) AS total FROM t_work_card WHERE {where_clause}", tuple(params))
+    total = total_row["total"]
+
+    items = query_all(
+        f"SELECT id, user_id AS userId, name, cover, `desc`, tags, "
+        f"category AS categoryId, use_count AS useCount, status, "
+        f"create_time AS createTime, update_time AS updateTime "
+        f"FROM t_work_card WHERE {where_clause} "
+        f"ORDER BY create_time DESC, id DESC LIMIT %s OFFSET %s",
+        tuple(params + [page_size, (page_num - 1) * page_size]),
+    )
+    return page_response(items, total=total, page_num=page_num, page_size=page_size)
+
+
+@admin_bp.get("/admin/work/<int:work_id>")
+@jwt_required()
+def get_work_admin(work_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    work = query_one(
+        "SELECT id, user_id AS userId, name, cover, `desc`, tags, "
+        "role_config, openings, summary, author, language, category, "
+        "use_count AS useCount, status, create_time AS createTime, update_time AS updateTime "
+        "FROM t_work_card WHERE id = %s",
+        (work_id,),
+    )
+    if not work:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "作品卡不存在")
+
+    for col in ("tags", "openings", "role_config"):
+        work[col] = _parse_json_col(work.get(col))
+
+    return success_response(work)
+
+
+@admin_bp.put("/admin/work/<int:work_id>")
+@jwt_required()
+def update_work_admin(work_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    payload = request.get_json(silent=True) or {}
+    updates = {}
+    values = []
+
+    for col in ["name", "desc", "cover", "author", "summary", "language", "category"]:
+        if col in payload:
+            updates[col] = "%s"
+            values.append(payload[col])
+
+    for col in ["status", "useCount"]:
+        if col in payload:
+            db_col = "status" if col == "status" else "use_count"
+            updates[db_col] = "%s"
+            values.append(payload[col])
+
+    if "tags" in payload:
+        updates["tags"] = "%s"
+        values.append(json.dumps(payload["tags"], ensure_ascii=False))
+
+    if not updates:
+        raise AppError(ErrorCode.PARAM_INVALID, "没有需要修改的内容")
+
+    set_clause = ", ".join(f"`{k}` = %s" for k in updates)
+    values.append(work_id)
+    execute(f"UPDATE t_work_card SET {set_clause} WHERE id = %s", tuple(values))
+    return success_response({"message": "更新成功"})
+
+
+@admin_bp.delete("/admin/work/<int:work_id>")
+@jwt_required()
+def delete_work_admin(work_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    execute("DELETE FROM t_work_collect WHERE work_id = %s", (work_id,))
+    execute("DELETE FROM t_conversation WHERE work_id = %s", (work_id,))
+    execute("DELETE FROM t_work_card WHERE id = %s", (work_id,))
+    return success_response({"message": "删除成功"})
+
+
+# ---- User Management ----
+
+@admin_bp.get("/admin/user")
+@jwt_required()
+def list_users_admin():
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    page_num = int(request.args.get("pageNum", 1))
+    page_size = min(int(request.args.get("pageSize", 10)), 50)
+    keyword = request.args.get("keyword", "")
+
+    where = ["is_delete = 0"]
+    params = []
+    if keyword:
+        where.append("(email LIKE %s OR nickname LIKE %s)")
+        params.extend([f"%{keyword}%", f"%{keyword}%"])
+
+    where_clause = " AND ".join(where)
+    total_row = query_one(f"SELECT COUNT(*) AS total FROM t_user WHERE {where_clause}", tuple(params))
+    total = total_row["total"]
+
+    items = query_all(
+        f"SELECT id, email, phone, nickname, avatar, vip_level AS vipLevel, "
+        f"vip_expire_time AS vipExpireTime, credits, status, "
+        f"create_time AS createTime, update_time AS updateTime "
+        f"FROM t_user WHERE {where_clause} "
+        f"ORDER BY create_time DESC, id DESC LIMIT %s OFFSET %s",
+        tuple(params + [page_size, (page_num - 1) * page_size]),
+    )
+    return page_response(items, total=total, page_num=page_num, page_size=page_size)
+
+
+@admin_bp.get("/admin/user/<int:target_user_id>")
+@jwt_required()
+def get_user_admin(target_user_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    user = query_one(
+        "SELECT id, email, phone, nickname, avatar, vip_level AS vipLevel, "
+        "vip_expire_time AS vipExpireTime, credits, status, "
+        "create_time AS createTime, update_time AS updateTime "
+        "FROM t_user WHERE id = %s AND is_delete = 0",
+        (target_user_id,),
+    )
+    if not user:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在")
+    return success_response(user)
+
+
+@admin_bp.put("/admin/user/<int:target_user_id>")
+@jwt_required()
+def update_user_admin(target_user_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    payload = request.get_json(silent=True) or {}
+    field_map = {
+        "nickname": "nickname",
+        "vipLevel": "vip_level",
+        "vipExpireTime": "vip_expire_time",
+        "credits": "credits",
+        "status": "status",
+    }
+    dynamic_update("t_user", field_map, payload, "id", target_user_id)
+    return success_response({"message": "更新成功"})
+
+
+@admin_bp.delete("/admin/user/<int:target_user_id>")
+@jwt_required()
+def delete_user_admin(target_user_id: int):
+    user_id = int(get_jwt_identity())
+    _check_admin(user_id)
+
+    execute("UPDATE t_user SET is_delete = 1 WHERE id = %s", (target_user_id,))
     return success_response({"message": "删除成功"})

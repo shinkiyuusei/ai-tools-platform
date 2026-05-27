@@ -2,12 +2,12 @@
 import { ref, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { chatApi, conversationApi } from '../api/chat'
-import { collectTool, getCollectedStatus } from '../api/user'
+import { useAuthStore } from '../stores/auth'
 import AppLayout from '../layouts/AppLayout.vue'
-import StarRating from '../components/StarRating.vue'
 import { formatTokens } from '../utils/format'
 
 const route = useRoute()
+const auth = useAuthStore()
 const workId = Number(route.params.workId)
 
 const work = ref(null)
@@ -27,16 +27,36 @@ const perspectiveOptions = ref([])
 const switchingPerspective = ref(false)
 const favorited = ref(false)
 
+// ---- Opening tooltip ----
+const tooltipText = ref('')
+const tooltipPos = ref({ x: 0, y: 0 })
+
+function showTooltip(e, text) {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const tooltipW = 400
+  let left = rect.left - tooltipW - 20
+  if (left < 16) left = rect.right + 20
+  tooltipPos.value = {
+    x: left,
+    y: Math.max(16, rect.top),
+  }
+  tooltipText.value = text
+}
+
+function hideTooltip() {
+  tooltipText.value = ''
+}
+
 const checkFavoriteStatus = async () => {
   try {
-    const res = await getCollectedStatus(workId)
+    const res = await chatApi.getCollectStatus(workId)
     favorited.value = res.data.collected
   } catch { /* ignore */ }
 }
 
 const toggleFavorite = async () => {
   try {
-    const res = await collectTool(workId)
+    const res = await chatApi.collectWork(workId)
     favorited.value = res.data.collected
   } catch {
     // silently fail
@@ -51,7 +71,7 @@ const models = [
 const ensureConversation = async () => {
   if (currentConversationId.value) return
   try {
-    const res = await conversationApi.create(workId, '')
+    const res = await conversationApi.create(workId, 'work', '')
     currentConversationId.value = res.data.id
     loadConversationList()
   } catch (e) {
@@ -204,6 +224,7 @@ const doStreamSend = (msgList) => {
     activeStream.value = null
     scrollToBottom()
     await saveMessages()
+    auth.refreshCredits()
   }
   stream.onError = async (err) => {
     rxMsg.content = `回复生成失败：${err}`
@@ -232,6 +253,7 @@ const sendMessage = async () => {
 
 const useOpening = async (text) => {
   if (!text || sending.value) return
+  hideTooltip()
   messages.value.push({ role: 'user', content: text })
   nextTick(() => scrollToBottom())
   await ensureConversation()
@@ -441,16 +463,32 @@ onMounted(async () => {
             <span v-if="work.author">{{ work.author }}</span>
             <span>{{ formatTokens(work.useCount) }}</span>
           </div>
-          <div class="sb-rating-row">
-            <StarRating work-type="tool" :work-id="work.id" />
-          </div>
         </div>
 
-        <!-- Opening Line -->
-        <div v-if="work.opening && messages.length === 0" class="sb-card sb-opening">
+        <!-- Opening Lines -->
+        <div v-if="work.openingStatements && work.openingStatements.length > 0 && messages.length === 0" class="sb-card sb-opening">
+          <div class="sb-label">选择开场白</div>
+          <div
+            v-for="(item, idx) in work.openingStatements"
+            :key="idx"
+            class="opening-bubble"
+            @click="useOpening(item.text)"
+            @mouseenter="showTooltip($event, item.text)"
+            @mouseleave="hideTooltip"
+          >
+            <div class="opening-label">{{ item.label }}</div>
+            <div class="opening-preview">{{ item.text }}</div>
+          </div>
+        </div>
+        <div v-else-if="work.opening && messages.length === 0" class="sb-card sb-opening">
           <div class="sb-label">开始对话</div>
-          <div class="opening-bubble" @click="useOpening(work.opening)">
-            {{ work.opening }}
+          <div
+            class="opening-bubble"
+            @click="useOpening(work.opening)"
+            @mouseenter="showTooltip($event, work.opening)"
+            @mouseleave="hideTooltip"
+          >
+            <div class="opening-preview">{{ work.opening }}</div>
           </div>
         </div>
 
@@ -479,6 +517,17 @@ onMounted(async () => {
           <p class="sb-empty-text">暂无评论</p>
         </div>
       </aside>
+
+      <!-- Fixed-position tooltip for opening full text -->
+      <Teleport to="body">
+        <div
+          v-if="tooltipText"
+          class="opening-tooltip-overlay"
+          :style="{ left: tooltipPos.x + 'px', top: tooltipPos.y + 'px' }"
+        >
+          <div class="opening-tooltip-content">{{ tooltipText }}</div>
+        </div>
+      </Teleport>
     </div>
 
     <div v-else class="error-state"><p>作品不存在或已下架</p></div>
@@ -903,6 +952,7 @@ onMounted(async () => {
 .sb-opening {
   background: linear-gradient(135deg, rgba(238, 162, 180, 0.06), rgba(200, 85, 84, 0.04));
   border-color: rgba(238, 162, 180, 0.12);
+  overflow: visible;
 }
 
 .opening-bubble {
@@ -916,12 +966,79 @@ onMounted(async () => {
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: pre-wrap;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+.opening-bubble:last-child {
+  margin-bottom: 0;
 }
 
 .opening-bubble:hover {
   border-color: var(--color-candy-pink-soft);
   background: var(--bg-card);
   color: var(--text-primary);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+  z-index: 5;
+}
+
+.opening-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.opening-preview {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Fixed-position tooltip overlay */
+.opening-tooltip-overlay {
+  position: fixed;
+  width: 400px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 9999;
+  pointer-events: none;
+  animation: tooltipIn 0.15s ease-out;
+}
+
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateX(4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.opening-tooltip-content {
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Arrow pointing right toward the sidebar */
+.opening-tooltip-overlay::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 18px;
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 8px solid var(--bg-card);
 }
 
 

@@ -17,30 +17,16 @@ services:
       - ./database:/docker-entrypoint-initdb.d
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
-  mongo:
-    image: mongo:7.0
-    container_name: ai_tools_mongo
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: root123456
-      MONGO_INITDB_DATABASE: ai_tools_platform
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
   redis:
     image: redis:7-alpine
     container_name: ai_tools_redis
     restart: unless-stopped
     command: redis-server --requirepass redis123456
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
 
 volumes:
   mysql_data:
-  mongo_data:
   redis_data:

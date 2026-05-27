@@ -21,7 +21,7 @@ const form = reactive({
   worldSetting: { worldName: '', eraTech: '', coreConflict: '', toneAtmosphere: '', mainPlot: '', initialState: '' },
   gameRules: '',
   statusBar: '',
-  opening: '',
+  openings: [{ label: '', text: '' }],
 })
 
 function addCharacter() {
@@ -31,6 +31,16 @@ function addCharacter() {
 
 function removeCharacter(index) {
   form.characters.splice(index, 1)
+}
+
+function addOpening() {
+  if (form.openings.length >= 10) return
+  form.openings.push({ label: '', text: '' })
+}
+
+function removeOpening(index) {
+  if (form.openings.length <= 1) return
+  form.openings.splice(index, 1)
 }
 
 const sections = [
@@ -56,7 +66,7 @@ async function handleSave() {
       worldSetting: form.worldSetting,
       gameRules: form.gameRules.trim(),
       statusBar: form.statusBar.trim(),
-      opening: form.opening.trim(),
+      openingStatements: form.openings.filter(o => o.text.trim()),
       models: ['deepseek-v4-flash'],
     })
     router.push(`/chat/${res.data.id}`)
@@ -143,8 +153,16 @@ const charFields = [
             <textarea v-model="form.detailedIntro" class="field-textarea" rows="5" placeholder="向玩家详细介绍你的作品——角色、故事背景、世界观、版本信息等" />
           </div>
           <div class="field">
-            <label>开场白</label>
-            <textarea v-model="form.opening" class="field-textarea" rows="4" placeholder="作品的开场白，玩家进入时首先看到的内容" />
+            <label>开场白 ({{ form.openings.length }}/10)</label>
+            <div v-for="(item, idx) in form.openings" :key="idx" class="opening-editor-item">
+              <div class="opening-item-header">
+                <span class="opening-item-num">#{{ idx + 1 }}</span>
+                <button v-if="form.openings.length > 1" class="btn-remove-sm" @click="removeOpening(idx)">×</button>
+              </div>
+              <BaseInput v-model="item.label" placeholder="开场白标题（如：标准开局、激烈开局）" />
+              <textarea v-model="item.text" class="field-textarea" rows="3" placeholder="开场白内容..." />
+            </div>
+            <button class="btn-add-opening" @click="addOpening">+ 添加开场白</button>
           </div>
         </section>
 
@@ -492,6 +510,56 @@ const charFields = [
   color: #fff;
   font-size: var(--text-xs);
   cursor: pointer;
+}
+
+/* opening editor */
+.opening-editor-item {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.opening-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-sm);
+}
+
+.opening-item-num {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.btn-remove-sm {
+  font-size: 14px;
+  background: none;
+  border: none;
+  color: var(--color-crimson-soft);
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+
+.btn-add-opening {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed var(--border-primary);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-add-opening:hover {
+  border-color: var(--color-misty-blue-soft);
+  color: var(--color-misty-blue-soft);
 }
 
 /* footer */

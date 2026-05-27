@@ -1,8 +1,8 @@
 <script setup>
-import { reactive, ref, onBeforeUnmount } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { register, sendCode } from '../api/user'
+import { register } from '../api/user'
 import { useAuthStore } from '../stores/auth'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
@@ -11,46 +11,18 @@ import AppLayout from '../layouts/AppLayout.vue'
 const router = useRouter()
 const auth = useAuthStore()
 
-const form = ref({ phone: '', email: '', code: '', password: '', confirmPassword: '' })
+const form = ref({ email: '', password: '', confirmPassword: '' })
 const loading = ref(false)
-const sending = ref(false)
-const countdown = ref(0)
 const errorMsg = ref('')
-
-let timer = null
-
-const handleSendCode = async () => {
-  const target = form.value.phone || form.value.email
-  if (!target) {
-    errorMsg.value = '请先输入手机号或邮箱'
-    return
-  }
-  sending.value = true
-  try {
-    await sendCode({ phone: form.value.phone, email: form.value.email, type: 'register' })
-    countdown.value = 60
-    timer = setInterval(() => {
-      countdown.value--
-      if (countdown.value <= 0) {
-        clearInterval(timer)
-        timer = null
-      }
-    }, 1000)
-  } catch (err) {
-    errorMsg.value = err.message || '发送失败'
-  } finally {
-    sending.value = false
-  }
-}
 
 const handleRegister = async () => {
   errorMsg.value = ''
-  if (!form.value.phone && !form.value.email) {
-    errorMsg.value = '请输入手机号或邮箱'
+  if (!form.value.email) {
+    errorMsg.value = '请输入邮箱'
     return
   }
-  if (!form.value.code) {
-    errorMsg.value = '请输入验证码'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.value.email)) {
+    errorMsg.value = '邮箱格式不正确'
     return
   }
   if (form.value.password.length < 6) {
@@ -64,12 +36,10 @@ const handleRegister = async () => {
   loading.value = true
   try {
     const res = await register({
-      phone: form.value.phone,
       email: form.value.email,
-      code: form.value.code,
       password: form.value.password,
     })
-    auth.setAuth(res.data.token, res.data.refreshToken, res.data.userInfo)
+    auth.setUserInfo(res.data.userInfo)
     router.push('/create')
   } catch (err) {
     errorMsg.value = err.message || '注册失败'
@@ -77,10 +47,6 @@ const handleRegister = async () => {
     loading.value = false
   }
 }
-
-onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
-})
 </script>
 
 <template>
@@ -96,26 +62,7 @@ onBeforeUnmount(() => {
         <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
 
         <div class="form-group">
-          <BaseInput v-model="form.phone" placeholder="手机号" label="手机号" />
-        </div>
-        <div class="form-group">
-          <BaseInput v-model="form.email" placeholder="邮箱（选填）" label="邮箱" />
-        </div>
-
-        <div class="code-row">
-          <div class="form-group code-input">
-            <BaseInput v-model="form.code" placeholder="验证码" label="验证码" />
-          </div>
-          <BaseButton
-            :loading="sending"
-            :disabled="countdown > 0"
-            variant="secondary"
-            size="sm"
-            class="code-btn"
-            @click="handleSendCode"
-          >
-            {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
-          </BaseButton>
+          <BaseInput v-model="form.email" placeholder="邮箱" label="邮箱" />
         </div>
 
         <div class="form-group">
@@ -184,21 +131,6 @@ onBeforeUnmount(() => {
 
 .form-group {
   margin-bottom: var(--space-md);
-}
-
-.code-row {
-  display: flex;
-  gap: var(--space-sm);
-  align-items: flex-end;
-}
-
-.code-input {
-  flex: 1;
-}
-
-.code-btn {
-  margin-bottom: var(--space-md);
-  flex-shrink: 0;
 }
 
 .links {

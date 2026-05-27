@@ -1,7 +1,7 @@
 <template>
   <div class="character-card-view">
     <div class="header">
-      <h1>{{ isEdit ? t('character.edit_title') : t('character.create_title') }}</h1>
+      <h1>{{ t('character.my_characters') }}</h1>
       <button class="btn-primary" @click="showCreateModal = true">
         {{ t('character.create_new') }}
       </button>
@@ -18,6 +18,9 @@
           <img v-if="char.avatar" :src="char.avatar" :alt="char.name" />
           <div v-else class="placeholder">{{ char.name.slice(0, 2) }}</div>
           <div class="card-overlay">
+            <button class="btn-chat" @click.stop="openChat(char)">
+              {{ t('character.start_chat') }}
+            </button>
             <button class="btn-edit" @click.stop="editCharacter(char)">
               {{ t('common.edit') }}
             </button>
@@ -28,11 +31,13 @@
         </div>
         <div class="card-content">
           <h3>{{ char.name }}</h3>
-          <p class="description">{{ char.description }}</p>
+          <p class="desc" v-if="char.desc">{{ char.desc }}</p>
+          <p class="author" v-if="char.author">— {{ char.author }}</p>
           <div class="card-stats">
-            <span>♥ {{ char.like_count }}</span>
-            <span>👁 {{ char.view_count }}</span>
-            <span>★ {{ char.collect_count }}</span>
+            <span>♥ {{ char.likeCount || 0 }}</span>
+            <span>👁 {{ char.viewCount || 0 }}</span>
+            <span>★ {{ char.collectCount || 0 }}</span>
+            <span>💬 {{ char.useCount || 0 }}</span>
           </div>
         </div>
       </div>
@@ -42,11 +47,32 @@
     <div v-if="showCreateModal || editingCharacter" class="modal-overlay" @click="closeModal">
       <div class="modal-content" @click.stop>
         <h2>{{ editingCharacter ? t('character.edit_title') : t('character.create_title') }}</h2>
-        
+
         <form @submit.prevent="saveCharacter">
           <div class="form-group">
-            <label>{{ t('character.name') }}</label>
+            <label>{{ t('character.name') }} *</label>
             <input v-model="formData.name" type="text" :placeholder="t('character.name_placeholder')" required />
+          </div>
+
+          <div class="form-group">
+            <label>{{ t('character.desc') }} *</label>
+            <input v-model="formData.desc" type="text" :placeholder="t('character.desc_placeholder')" required maxlength="500" />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>{{ t('character.author') }}</label>
+              <input v-model="formData.author" type="text" :placeholder="t('character.author_placeholder')" />
+            </div>
+            <div class="form-group">
+              <label>{{ t('character.language') }}</label>
+              <select v-model="formData.language">
+                <option value="zh-Hans">简体中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+              </select>
+            </div>
           </div>
 
           <div class="form-group">
@@ -69,51 +95,38 @@
             </div>
           </div>
 
+          <div class="form-row">
+            <div class="form-group">
+              <label>{{ t('character.category') }}</label>
+              <select v-model="formData.category">
+                <option value="0">{{ t('common.select') }}</option>
+                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                  {{ cat.name }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>{{ t('character.tags') }}</label>
+              <input v-model="tagInput" type="text" :placeholder="t('character.tags_placeholder')" @keydown.enter.prevent="addTag" />
+              <div class="tag-chips" v-if="formData.tags.length">
+                <span v-for="(tag, i) in formData.tags" :key="i" class="tag-chip">
+                  {{ tag }}
+                  <button type="button" class="tag-remove" @click="removeTag(i)">×</button>
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div class="form-group">
-            <label>{{ t('character.description') }}</label>
+            <label>{{ t('character.persona_content') }} *</label>
             <textarea
-              v-model="formData.description"
-              :placeholder="t('character.description_placeholder')"
-              rows="3"
+              v-model="formData.personaContent"
+              :placeholder="t('character.persona_content_placeholder')"
+              rows="15"
+              class="persona-editor"
               required
             />
-          </div>
-
-          <div class="form-group">
-            <label>{{ t('character.personality') }}</label>
-            <textarea
-              v-model="formData.personality"
-              :placeholder="t('character.personality_placeholder')"
-              rows="3"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>{{ t('character.background') }}</label>
-            <textarea
-              v-model="formData.background"
-              :placeholder="t('character.background_placeholder')"
-              rows="3"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>{{ t('character.tags') }}</label>
-            <input
-              v-model="formData.tags"
-              type="text"
-              :placeholder="t('character.tags_placeholder')"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>{{ t('character.category') }}</label>
-            <select v-model="formData.categoryId">
-              <option value="0">{{ t('common.select') }}</option>
-              <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                {{ cat.name }}
-              </option>
-            </select>
+            <span class="hint">{{ t('character.persona_content_hint') }}</span>
           </div>
 
           <div class="form-group">
@@ -139,15 +152,19 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { characterApi } from '../api/character';
 
 const { t } = useI18n();
+const router = useRouter();
 
 const characterList = ref([]);
 const showCreateModal = ref(false);
 const editingCharacter = ref(null);
 const fileInput = ref(null);
+const tagInput = ref('');
+
 const categories = ref([
   { id: 1, name: '恋爱' },
   { id: 2, name: '角色' },
@@ -156,16 +173,19 @@ const categories = ref([
   { id: 5, name: '日常' }
 ]);
 
-const formData = ref({
+const emptyForm = () => ({
   name: '',
+  desc: '',
   avatar: '',
-  description: '',
-  personality: '',
-  background: '',
-  tags: '',
-  categoryId: 0,
+  author: '',
+  language: 'zh-Hans',
+  category: 0,
+  tags: [],
+  personaContent: '',
   isPublic: true
 });
+
+const formData = ref(emptyForm());
 
 const isEdit = computed(() => !!editingCharacter.value);
 
@@ -179,27 +199,31 @@ const loadCharacters = async () => {
 };
 
 const viewCharacter = (char) => {
-  // Navigate to character detail view
-  console.log('View character:', char);
+  router.push(`/character/${char.id}`);
+};
+
+const openChat = (char) => {
+  router.push(`/chat/character/${char.id}`);
 };
 
 const editCharacter = (char) => {
   editingCharacter.value = char;
   formData.value = {
-    name: char.name,
-    avatar: char.avatar,
-    description: char.description,
-    personality: char.personality,
-    background: char.background,
-    tags: char.tags,
-    categoryId: char.category_id,
-    isPublic: char.is_public === 1
+    name: char.name || '',
+    desc: char.desc || '',
+    avatar: char.avatar || '',
+    author: char.author || '',
+    language: char.language || 'zh-Hans',
+    category: char.category || 0,
+    tags: Array.isArray(char.tags) ? [...char.tags] : [],
+    personaContent: char.personaContent || '',
+    isPublic: char.isPublic !== 0
   };
 };
 
 const deleteCharacter = async (id) => {
   if (!confirm(t('character.delete_confirm'))) return;
-  
+
   try {
     await characterApi.delete(id);
     loadCharacters();
@@ -208,20 +232,38 @@ const deleteCharacter = async (id) => {
   }
 };
 
+const addTag = () => {
+  const val = tagInput.value.trim();
+  if (val && !formData.value.tags.includes(val)) {
+    formData.value.tags.push(val);
+  }
+  tagInput.value = '';
+};
+
+const removeTag = (index) => {
+  formData.value.tags.splice(index, 1);
+};
+
 const saveCharacter = async () => {
   try {
     const data = {
-      ...formData.value,
-      categoryId: formData.value.categoryId,
+      name: formData.value.name,
+      desc: formData.value.desc,
+      avatar: formData.value.avatar,
+      author: formData.value.author,
+      language: formData.value.language,
+      category: formData.value.category,
+      tags: formData.value.tags,
+      personaContent: formData.value.personaContent,
       isPublic: formData.value.isPublic ? 1 : 0
     };
-    
+
     if (editingCharacter.value) {
       await characterApi.update(editingCharacter.value.id, data);
     } else {
       await characterApi.create(data);
     }
-    
+
     closeModal();
     loadCharacters();
   } catch (error) {
@@ -232,20 +274,12 @@ const saveCharacter = async () => {
 const closeModal = () => {
   showCreateModal.value = false;
   editingCharacter.value = null;
-  formData.value = {
-    name: '',
-    avatar: '',
-    description: '',
-    personality: '',
-    background: '',
-    tags: '',
-    categoryId: 0,
-    isPublic: true
-  };
+  formData.value = emptyForm();
+  tagInput.value = '';
 };
 
 const triggerFileUpload = () => {
-  fileInput.value.click();
+  fileInput.value?.click();
 };
 
 const handleFileUpload = async (event) => {
@@ -336,9 +370,10 @@ onMounted(() => {
   bottom: 0;
   background: var(--bg-overlay);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -360,14 +395,20 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.description {
+.desc {
   color: var(--text-secondary);
   font-size: var(--text-sm);
-  margin: 0 0 var(--space-sm) 0;
+  margin: 0 0 2px 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.author {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  margin: 0 0 var(--space-sm) 0;
 }
 
 .card-stats {
@@ -396,7 +437,7 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-card);
   width: 90%;
-  max-width: 600px;
+  max-width: 700px;
   max-height: 90vh;
   overflow-y: auto;
   color: var(--text-primary);
@@ -408,6 +449,15 @@ onMounted(() => {
 
 .form-group {
   margin-bottom: var(--space-lg);
+}
+
+.form-row {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.form-row .form-group {
+  flex: 1;
 }
 
 .form-group label {
@@ -429,6 +479,13 @@ onMounted(() => {
   font-size: var(--text-sm);
   color: var(--text-primary);
   transition: border-color var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.persona-editor {
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .form-group input:focus,
@@ -446,6 +503,41 @@ onMounted(() => {
 .form-group select option {
   background: var(--bg-elevated);
   color: var(--text-primary);
+}
+
+.hint {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
 }
 
 .avatar-upload {
@@ -511,6 +603,7 @@ onMounted(() => {
 
 .btn-primary,
 .btn-secondary,
+.btn-chat,
 .btn-edit,
 .btn-delete {
   padding: 8px 18px;
@@ -542,13 +635,22 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-.btn-edit {
+.btn-chat {
   background: var(--color-dark-green-soft);
   color: #fff;
 }
 
-.btn-edit:hover {
+.btn-chat:hover {
   background: var(--color-dark-green);
+}
+
+.btn-edit {
+  background: var(--color-misty-blue-soft);
+  color: #fff;
+}
+
+.btn-edit:hover {
+  background: var(--color-misty-blue);
 }
 
 .btn-delete {

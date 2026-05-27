@@ -1,42 +1,129 @@
-# AI 生成工具聚合平台
+# AI 互动叙事聊天平台
 
-基于 PRD 初始化的前后端分离项目骨架：
+沉浸式 AI 角色扮演与互动小说平台。选择世界观与角色，进入由 DeepSeek 驱动的第一人称叙事聊天——AI 实时追踪好感度、欲望值等角色状态，每轮输出叙事正文 + 状态栏 + 选择分支。
 
-- `backend`：Flask API 服务，统一前缀为 `/api/v1`
-- `frontend`：Vite + Vue 3 前端应用
-- `docker-compose.yml`：MySQL 8.0、MongoDB、Redis 本地开发环境
+> **内容警告：18+ / NSFW** — 本项目面向成人用户，包含成人向互动叙事内容。未成年人请勿使用。
+
+## 核心功能
+
+- **互动叙事聊天** — 流式 SSE 实时生成沉浸式第一人称叙事，支持思考模式（reasoning），AI 在叙事中自动推进角色状态变化
+- **世界观创作** — 自定义世界设定、角色档案（外观 / 性格 / 语气 / 背景）、主角人设、核心冲突与初始场景，构建完整的互动小说场景
+- **发现与推荐** — 排行榜、分类浏览、热门趋势、个性化推荐，探索社区中的互动叙事作品
+- **角色状态追踪** — 好感度、欲望值等数值随剧情自动变化，持久化存储于对话中
+- **多视角切换** — 同一作品中自由切换扮演角色，体验不同视角的叙事
+- **多语言** — 支持简体中文、English、日本語、한국어，后端 i18n 全覆盖
+- **用户系统** — JWT 注册/登录、收藏/喜欢/评分、个人中心与生成记录
+- **管理后台** — 标签管理、作品 CRUD、角色卡管理
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| **前端** | Vue 3 + Vite 8 + Vue Router 5 + Pinia 3 + Vue I18n + Axios |
+| **后端** | Flask 3 + Flask-JWT-Extended + Flask-CORS + Flask-Limiter + Flask-Babel |
+| **数据库** | MySQL 8.0（主库）、Redis 7（缓存 / 限流 / 分析） |
+| **AI** | DeepSeek API — `deepseek-v4-flash`（聊天模型）、`deepseek-v4-pro`（推理模型） |
+| **容器** | Docker Compose（MySQL + Redis） |
 
 ## 快速开始
 
-1. 复制 `.env.example` 为 `.env` 并按需修改配置。
-2. 启动基础依赖：
+### 1. 环境准备
+
+```bash
+git clone <repo-url>
+cd ai-tools-platform
+cp .env.example .env   # 编辑 .env 填入 DeepSeek API Key 等配置
+```
+
+### 2. 启动基础依赖（Docker）
 
 ```bash
 docker compose up -d
 ```
 
-3. 启动后端：
+启动 MySQL 8.0、Redis 7 两个服务。
+
+### 3. 启动后端
 
 ```bash
 cd backend
 python -m venv .venv
-. .venv/bin/activate
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python run.py
+python run.py               # 默认 http://localhost:5000
 ```
 
-4. 启动前端：
+### 4. 启动前端
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev                 # 默认 http://localhost:5173
 ```
 
-## 已初始化内容
+浏览器打开前端地址即可使用。
 
-- JWT 鉴权基础设施
-- 统一错误响应与业务错误码
-- MySQL / MongoDB / Redis 连接配置
-- DeepSeek 适配层占位，支持思考模式与异步生成任务结构
-- Axios 请求拦截器与基础 UI 组件目录
+## 项目结构
+
+```
+ai-tools-platform/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/          # REST API 蓝图
+│   │   ├── core/            # 配置（config.py）
+│   │   ├── extensions/      # Flask 扩展初始化
+│   │   ├── middlewares/     # 安全、限流、i18n、响应中间件
+│   │   ├── services/        # 业务逻辑层
+│   │   │   ├── ai/          # DeepSeek 适配器
+│   │   │   └── chat/        # 叙事 Prompt 构建器
+│   │   └── utils/           # 工具函数（日志、安全、响应）
+│   ├── translations/        # i18n 翻译文件
+│   ├── uploads/             # 上传文件目录
+│   └── run.py               # 应用入口
+├── frontend/
+│   └── src/
+│       ├── api/             # API 请求层
+│       ├── components/      # 通用组件
+│       ├── router/          # 路由配置
+│       ├── stores/          # Pinia 状态管理
+│       └── views/           # 页面视图
+├── database/                # 数据库初始化 SQL
+├── docker-compose.yml       # 本地开发容器编排
+├── .env.example             # 环境变量模板
+└── README.md
+```
+
+## 配置说明
+
+编辑项目根目录下的 `.env` 文件：
+
+```env
+# Flask
+FLASK_ENV=development
+SECRET_KEY=your-secret-key
+JWT_SECRET_KEY=your-jwt-secret
+
+# MySQL
+MYSQL_HOST=127.0.0.1
+MYSQL_DB_PORT=3306
+MYSQL_DB_USER=ai_user
+MYSQL_DB_PASSWORD=ai_pass_123
+MYSQL_DB_NAME=ai_tools_platform
+
+# Redis
+REDIS_HOST=127.0.0.1
+REDIS_DB_PORT=6379
+REDIS_PASSWORD=redis123456
+
+# DeepSeek（必填）
+DEEPSEEK_API_KEY=sk-xxxxxxxx
+DEEPSEEK_API_BASE=https://api.deepseek.com
+DEEPSEEK_CHAT_MODEL=deepseek-v4-flash
+DEEPSEEK_REASONER_MODEL=deepseek-v4-pro
+```
+
+`SECRET_KEY`、`JWT_SECRET_KEY`、`DEEPSEEK_API_KEY` 三项务必按实际环境修改。
+
+## 许可证
+
+MIT

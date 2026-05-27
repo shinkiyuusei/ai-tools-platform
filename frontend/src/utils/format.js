@@ -12,7 +12,3 @@ const CHINESE_THRESHOLDS = [[100000000, 100000000, '亿'], [10000, 10000, '万']
 export const formatTokens = (num) => formatLargeNumber(num, TOKEN_THRESHOLDS)
 export const formatHot = (num) => formatLargeNumber(num, CHINESE_THRESHOLDS)
 
-export const formatScore = (item) => {
-  const r = Number(item.rating || 0)
-  return r > 0 ? r.toFixed(1) : '-'
-}

@@ -19,9 +19,10 @@ const menuList = [
 ]
 
 const adminMenuList = [
-  { to: '/admin/tool', label: '作品管理', icon: '▣', color: 'gold' },
+  { to: '/admin/work', label: '作品卡管理', icon: '▣', color: 'gold' },
   { to: '/admin/character', label: '角色卡管理', icon: '▣', color: 'gold' },
   { to: '/admin/tag', label: '标签管理', icon: '▣', color: 'gold' },
+  { to: '/admin/user', label: '用户管理', icon: '▣', color: 'gold' },
 ]
 
 const errorMessage = ref('')
@@ -43,12 +44,19 @@ const handleLogout = () => {
   router.push('/explore')
 }
 
+const handleAuthExpired = () => {
+  auth.setUserInfo(null)
+  router.push('/login')
+}
+
 onMounted(() => {
   window.addEventListener('app:error', handleError)
+  window.addEventListener('app:auth-expired', handleAuthExpired)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('app:error', handleError)
+  window.removeEventListener('app:auth-expired', handleAuthExpired)
 })
 </script>
 
@@ -72,7 +80,7 @@ onBeforeUnmount(() => {
 
         <div class="top-nav-user">
           <template v-if="auth.isLoggedIn()">
-            <span class="user-points">积分:255</span>
+            <span class="user-points">积分:{{ auth.userInfo?.credits ?? 0 }}</span>
             <div class="user-avatar-mini">{{ auth.userInfo?.nickname?.charAt(0) || 'U' }}</div>
             <RouterLink to="/usercenter" class="user-name-link">{{ auth.userInfo?.nickname || '用户' }}</RouterLink>
             <button class="nav-logout-btn" @click="handleLogout">{{ t('nav.logout') }}</button>

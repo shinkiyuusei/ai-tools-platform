@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { getCollectedTools } from '../api/user'
+import { chatApi } from '../api/chat'
 import BasePagination from '../components/base/BasePagination.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 import { formatTokens, formatHot } from '../utils/format'
@@ -15,7 +15,7 @@ const loading = ref(false)
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await getCollectedTools({
+    const res = await chatApi.getCollectedWorks({
       pageNum: listData.value.pageNum,
       pageSize: listData.value.pageSize,
     })
@@ -75,7 +75,6 @@ onMounted(fetchList)
             <p class="card-desc">{{ item.desc }}</p>
             <div class="card-footer">
               <span class="card-type">{{ item.isFree ? '免费' : 'VIP' }}</span>
-              <span class="card-score" v-if="item.rating">★ {{ Number(item.rating).toFixed(1) }}</span>
             </div>
           </div>
         </div>

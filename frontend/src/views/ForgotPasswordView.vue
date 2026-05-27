@@ -1,52 +1,23 @@
 <script setup>
-import { ref, onBeforeUnmount } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { resetPassword, sendCode } from '../api/user'
+import { resetPassword } from '../api/user'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 
 const router = useRouter()
 
-const form = ref({ account: '', code: '', newPassword: '', confirmPassword: '' })
-const step = ref(1)
+const form = ref({ account: '', newPassword: '', confirmPassword: '' })
 const loading = ref(false)
-const sending = ref(false)
-const countdown = ref(0)
 const errorMsg = ref('')
 const successMsg = ref('')
 
-let timer = null
-
-const handleSendCode = async () => {
-  if (!form.value.account) {
-    errorMsg.value = '请输入手机号或邮箱'
-    return
-  }
-  sending.value = true
-  try {
-    await sendCode({ phone: form.value.account, email: form.value.account, type: 'reset' })
-    step.value = 2
-    countdown.value = 60
-    timer = setInterval(() => {
-      countdown.value--
-      if (countdown.value <= 0) {
-        clearInterval(timer)
-        timer = null
-      }
-    }, 1000)
-  } catch (err) {
-    errorMsg.value = err.message || '发送失败'
-  } finally {
-    sending.value = false
-  }
-}
-
 const handleReset = async () => {
   errorMsg.value = ''
-  if (!form.value.code) {
-    errorMsg.value = '请输入验证码'
+  if (!form.value.account) {
+    errorMsg.value = '请输入手机号或邮箱'
     return
   }
   if (form.value.newPassword.length < 6) {
@@ -61,7 +32,6 @@ const handleReset = async () => {
   try {
     await resetPassword({
       account: form.value.account,
-      code: form.value.code,
       newPassword: form.value.newPassword,
     })
     successMsg.value = '密码重置成功，即将跳转登录页…'
@@ -72,10 +42,6 @@ const handleReset = async () => {
     loading.value = false
   }
 }
-
-onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
-})
 </script>
 
 <template>
@@ -85,35 +51,22 @@ onBeforeUnmount(() => {
         <div class="auth-header">
           <div class="auth-icon">◇</div>
           <h1>重置密码</h1>
-          <p>通过手机号或邮箱重置</p>
+          <p>输入账号和新密码</p>
         </div>
 
         <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
         <div v-if="successMsg" class="success-msg">{{ successMsg }}</div>
 
-        <template v-if="step === 1">
-          <div class="form-group">
-            <BaseInput v-model="form.account" placeholder="手机号 / 邮箱" label="账号" />
-          </div>
-          <BaseButton :loading="sending" block size="lg" @click="handleSendCode">获取验证码</BaseButton>
-        </template>
-
-        <template v-else>
-          <div class="form-group">
-            <BaseInput v-model="form.code" placeholder="验证码" label="验证码" />
-          </div>
-          <div class="code-info">
-            <span v-if="countdown > 0">{{ countdown }}s 后可重新发送</span>
-            <a v-else class="resend" @click="handleSendCode">重新发送</a>
-          </div>
-          <div class="form-group">
-            <BaseInput v-model="form.newPassword" placeholder="新密码（至少6位）" type="password" label="新密码" />
-          </div>
-          <div class="form-group">
-            <BaseInput v-model="form.confirmPassword" placeholder="确认新密码" type="password" label="确认密码" />
-          </div>
-          <BaseButton :loading="loading" block size="lg" @click="handleReset">重置密码</BaseButton>
-        </template>
+        <div class="form-group">
+          <BaseInput v-model="form.account" placeholder="手机号 / 邮箱" label="账号" />
+        </div>
+        <div class="form-group">
+          <BaseInput v-model="form.newPassword" placeholder="新密码（至少6位）" type="password" label="新密码" />
+        </div>
+        <div class="form-group">
+          <BaseInput v-model="form.confirmPassword" placeholder="确认新密码" type="password" label="确认密码" />
+        </div>
+        <BaseButton :loading="loading" block size="lg" @click="handleReset">重置密码</BaseButton>
 
         <div class="links">
           <router-link to="/login">返回登录</router-link>
@@ -182,21 +135,6 @@ onBeforeUnmount(() => {
 
 .form-group {
   margin-bottom: var(--space-md);
-}
-
-.code-info {
-  margin: -var(--space-sm) 0 var(--space-md);
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.resend {
-  color: var(--color-misty-blue-soft);
-  cursor: pointer;
-}
-
-.resend:hover {
-  color: var(--color-misty-blue);
 }
 
 .links {

@@ -4,6 +4,7 @@ Internationalization API endpoints
 from flask import Blueprint, request, g
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
+from ...extensions import get_redis_client
 from ...services.i18n import get_supported_languages, validate_language, translate
 from ...utils.response import success_response
 
@@ -33,14 +34,8 @@ def set_user_language():
         from ...core.errors import AppError, ErrorCode
         raise AppError(ErrorCode.PARAM_INVALID, f"Unsupported language: {lang}")
     
-    # Store user's language preference in MongoDB
-    from ...extensions import get_mongo_db
-    mongo_db = get_mongo_db()
-    mongo_db["t_user_settings"].update_one(
-        {"userId": user_id},
-        {"$set": {"language": lang}},
-        upsert=True
-    )
+    # Store user's language preference in Redis
+    get_redis_client().hset("user:settings", str(user_id), lang)
     
     # Set in current request context
     g.user_language = lang
@@ -57,11 +52,7 @@ def get_user_language():
     """Get user's preferred language"""
     user_id = int(get_jwt_identity())
     
-    from ...extensions import get_mongo_db
-    mongo_db = get_mongo_db()
-    user_settings = mongo_db["t_user_settings"].find_one({"userId": user_id})
-    
-    current_lang = user_settings.get("language") if user_settings else "zh"
+    current_lang = get_redis_client().hget("user:settings", str(user_id)) or "zh"
     
     return success_response({
         "language": current_lang

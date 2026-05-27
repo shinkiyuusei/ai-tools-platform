@@ -29,8 +29,7 @@ def setup_logging(app):
     
     # Configure other loggers
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
-    logging.getLogger('pymongo').setLevel(logging.WARNING)
-    
+
     return app.logger
 
 

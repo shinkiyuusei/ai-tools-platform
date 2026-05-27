@@ -37,6 +37,15 @@ export const chatApi = {
   updateWork(workId, data) {
     return http.put(`/chat/work/${workId}`, data)
   },
+  collectWork(workId) {
+    return http.post(`/chat/work/${workId}/collect`)
+  },
+  getCollectStatus(workId) {
+    return http.get(`/chat/work/${workId}/collect`)
+  },
+  getCollectedWorks(params) {
+    return http.get('/user/work/collected', { params })
+  },
   updateWorkConfig(workId, config) {
     return http.put(`/chat/work/${workId}/config`, config)
   },
@@ -56,11 +65,18 @@ export const chatApi = {
 
     const start = async () => {
       try {
+        const csrfToken = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('csrf_access_token='))
+          ?.split('=')[1]
+
         const res = await fetch(`${BASE}/ai/chat/completions/stream`, {
           method: 'POST',
+          credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
           },
           body: JSON.stringify({ messages, systemPrompt, model, thinkingMode, reasoningEffort, sceneContext, conversationId }),
           signal: controller.signal,
@@ -132,17 +148,20 @@ export const chatApi = {
 }
 
 export const conversationApi = {
-  create(workId, title = '') {
-    return http.post('/conversation', { workId, title })
+  create(entityId, entityType = 'work', title = '') {
+    return http.post('/conversation', { entityId, entityType, title })
   },
   getDetail(id) {
     return http.get(`/conversation/${id}`)
   },
+  saveMessages(id, messages) {
+    return http.post(`/conversation/${id}/messages`, { messages })
+  },
   addMessages(id, messages) {
     return http.post(`/conversation/${id}/messages`, { messages })
   },
-  list(workId, pageNum = 1, pageSize = 20) {
-    return http.get('/conversations', { params: { workId, pageNum, pageSize } })
+  list(entityId, entityType = 'work', pageNum = 1, pageSize = 20) {
+    return http.get('/conversations', { params: { entityId, entityType, pageNum, pageSize } })
   },
   remove(id) {
     return http.delete(`/conversation/${id}`)

@@ -1,65 +1,62 @@
-from datetime import datetime
+import json
+import math
 
 from flask import Blueprint, request, Response, stream_with_context
-from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_request
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...core.errors import AppError, ErrorCode
-from ...extensions import get_mongo_db, get_redis_client
-from ...middlewares.rate_limit import daily_limit, rate_limit
 from ...services.ai.deepseek import DeepSeekAdapter, TOKEN_USAGE_SIGNAL
 from ...services.audit import audit_content
 from ...services.chat.prompt_builder import parse_character_states
+from ...services.credit import deduct, get_balance
 from ...utils.mysql import execute, query_one
 from ...utils.response import success_response
-from ...utils.snowflake import generate_id
-import json
 
 ai_bp = Blueprint("ai", __name__)
 
 
-def _add_token_usage(work_id: int, tokens: int):
-    if not work_id or not tokens:
+def _add_token_usage(entity_id: int, tokens: int, entity_type: str = "work"):
+    if not entity_id or not tokens:
         return
+    table = "t_work_card" if entity_type == "work" else "t_character_card"
     execute(
-        "UPDATE t_ai_tool SET use_count = use_count + %s WHERE id = %s",
-        (tokens, work_id),
+        f"UPDATE {table} SET use_count = use_count + %s WHERE id = %s",
+        (tokens, entity_id),
     )
 
 
-def _check_vip_permission(user_id: int, tool: dict):
-    if tool["isFree"]:
-        return
-    if user_id == 0:
-        raise AppError(ErrorCode.VIP_REQUIRED, "该工具需要登录后使用")
+def _check_and_deduct_credits(user_id: int, tokens: int, **kwargs):
+    """Deduct credits from user based on token consumption (100 tokens = 1 credit, ceil).
 
-    user = query_one(
-        "SELECT vip_level, free_count, status FROM t_user WHERE id = %s AND is_delete = 0",
-        (user_id,),
+    Uses Redis atomic DECRBY as the primary data source.
+    Returns the deducted amount.
+    """
+    if not tokens:
+        return 0
+    deduction = math.ceil(tokens / 100)
+    balance = get_balance(user_id)
+    if balance < 0:
+        raise AppError(ErrorCode.FORBIDDEN, "积分已透支，无法继续对话，请联系管理员充值")
+    deduct(
+        user_id,
+        deduction,
+        tokens_used=tokens,
+        **kwargs,
     )
-    if not user or user["status"] != 1:
-        raise AppError(ErrorCode.FORBIDDEN, "账号异常")
+    return deduction
 
-    vip_level = user["vip_level"]
-    if vip_level == 0:
-        redis_client = get_redis_client()
-        today_key = f"daily_count:{user_id}:{datetime.utcnow().strftime('%Y%m%d')}"
-        used = int(redis_client.get(today_key) or 0)
-        if used >= user["free_count"]:
-            raise AppError(ErrorCode.VIP_REQUIRED, "今日免费次数已用完，请开通会员")
-        redis_client.incr(today_key)
-        redis_client.expire(today_key, 86400)
-        return
 
-    vip_rights = query_one(
-        "SELECT all_tool, concurrency_limit FROM t_vip_rights WHERE vip_level = %s",
-        (vip_level,),
-    )
-    if not vip_rights or not vip_rights["all_tool"]:
-        raise AppError(ErrorCode.VIP_REQUIRED, "当前会员等级无法使用该工具")
+def _ensure_credits(user_id: int):
+    """Raise AppError if user has negative balance."""
+    balance = get_balance(user_id)
+    if balance < 0:
+        raise AppError(ErrorCode.FORBIDDEN, "积分已透支，无法继续对话，请联系管理员充值")
 
 
 @ai_bp.post("/ai/chat/completions")
+@jwt_required()
 def chat_completions():
+    user_id = int(get_jwt_identity())
     payload = request.get_json(silent=True) or {}
     messages = payload.get("messages") or []
     model = payload.get("model") or ""
@@ -109,14 +106,16 @@ def chat_completions():
 
     # load persisted character state and inject into system prompt
     character_state = None
-    work_id = None
+    entity_id = 0
+    entity_type = "work"
     if conversation_id:
         conv = query_one(
-            "SELECT work_id, character_state FROM t_conversation WHERE id = %s AND is_delete = 0",
+            "SELECT entity_id, entity_type, character_state FROM t_conversation WHERE id = %s AND is_delete = 0",
             (conversation_id,),
         )
         if conv:
-            work_id = conv.get("work_id")
+            entity_id = conv.get("entity_id", 0)
+            entity_type = conv.get("entity_type", "work")
             if conv.get("character_state"):
                 try:
                     character_state = json.loads(conv["character_state"]) if isinstance(conv["character_state"], str) else conv["character_state"]
@@ -177,7 +176,8 @@ def chat_completions():
             pass
 
     total_tokens = result.get("usage", {}).get("total_tokens", 0)
-    _add_token_usage(work_id, total_tokens)
+    _add_token_usage(entity_id, total_tokens, entity_type)
+    _check_and_deduct_credits(user_id, total_tokens, conversation_id=conversation_id)
 
     return success_response(
         {
@@ -190,8 +190,10 @@ def chat_completions():
 
 
 @ai_bp.post("/ai/chat/completions/stream")
+@jwt_required()
 def chat_completions_stream():
     """Streaming chat completions via SSE."""
+    user_id = int(get_jwt_identity())
     payload = request.get_json(silent=True) or {}
     messages = payload.get("messages") or []
     model = payload.get("model") or ""
@@ -244,14 +246,16 @@ def chat_completions_stream():
 
     # load persisted character state from conversation and inject into system prompt
     character_state = None
-    work_id = None
+    entity_id = 0
+    entity_type = "work"
     if conversation_id:
         conv = query_one(
-            "SELECT work_id, character_state FROM t_conversation WHERE id = %s AND is_delete = 0",
+            "SELECT entity_id, entity_type, character_state FROM t_conversation WHERE id = %s AND is_delete = 0",
             (conversation_id,),
         )
         if conv:
-            work_id = conv.get("work_id")
+            entity_id = conv.get("entity_id", 0)
+            entity_type = conv.get("entity_type", "work")
             if conv.get("character_state"):
                 try:
                     character_state = json.loads(conv["character_state"]) if isinstance(conv["character_state"], str) else conv["character_state"]
@@ -288,6 +292,8 @@ def chat_completions_stream():
 
     service = DeepSeekAdapter()
 
+    _ensure_credits(user_id)
+
     # accumulator for full response to parse state bar after streaming
     full_response = []
 
@@ -318,7 +324,11 @@ def chat_completions_stream():
 
         # Accumulate token usage to the work/character card
         if stream_tokens:
-            _add_token_usage(work_id, stream_tokens)
+            _add_token_usage(entity_id, stream_tokens, entity_type)
+            try:
+                _check_and_deduct_credits(user_id, stream_tokens, conversation_id=conversation_id)
+            except AppError:
+                pass  # deduction failure must not break the stream
 
         # parse and persist character state from the full response
         if conversation_id and full_response:
@@ -349,98 +359,3 @@ def chat_completions_stream():
             "X-Accel-Buffering": "no",
         },
     )
-
-
-@ai_bp.post("/ai/generate/<int:tool_id>")
-@rate_limit(max_requests=3, window_seconds=1)
-def generate(tool_id: int):
-    payload = request.get_json(silent=True) or {}
-    thinking_mode = bool(payload.pop("thinkingMode", False))
-    async_mode = bool(payload.pop("asyncMode", False))
-
-    user_id = 0
-    try:
-        verify_jwt_in_request(optional=True)
-        identity = get_jwt_identity()
-        if identity:
-            user_id = int(identity)
-    except Exception:
-        user_id = 0
-
-    tool = query_one(
-        "SELECT id, name, is_free AS isFree, is_vip AS isVip FROM t_ai_tool WHERE id = %s AND status = 1",
-        (tool_id,),
-    )
-    if not tool:
-        raise AppError(ErrorCode.SYSTEM_ERROR, "工具不存在或已下架")
-
-    _check_vip_permission(user_id, tool)
-
-    generate_params = {k: v for k, v in payload.items() if k not in ("thinkingMode", "asyncMode")}
-    if not generate_params:
-        raise AppError(ErrorCode.PARAM_INVALID, "生成参数不能为空")
-
-    prompt_text = generate_params.get("topic") or generate_params.get("prompt") or str(generate_params)
-    audit_res = audit_content(prompt_text)
-    if not audit_res["passed"]:
-        raise AppError(ErrorCode.PARAM_INVALID, audit_res["message"])
-
-    service = DeepSeekAdapter()
-    if async_mode:
-        result = service.submit_async_task(tool_id, user_id, generate_params, tool["name"], thinking_mode=thinking_mode)
-        result["status"] = 0
-        result["message"] = "任务已提交，后续可通过 taskId 轮询或接 WebSocket 推送"
-        return success_response(result)
-
-    prompt = generate_params.get("topic") or generate_params.get("prompt") or str(generate_params)
-    ai_result = service.generate_text(prompt, thinking_mode=thinking_mode)
-    answer = ai_result["content"]
-    gen_tokens = ai_result.get("total_tokens", 0)
-
-    output_audit = audit_content(answer)
-    if not output_audit["passed"]:
-        answer = "[内容审核未通过，结果已拦截]"
-
-    record_id = f"record_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{user_id}"
-    mongo_db = get_mongo_db()
-    mongo_db["t_generate_record"].insert_one(
-        {
-            "recordId": record_id,
-            "userId": user_id,
-            "toolId": tool_id,
-            "toolName": tool["name"],
-            "params": generate_params,
-            "result": answer,
-            "status": 1,
-            "createTime": datetime.utcnow(),
-            "isCollected": 0,
-        }
-    )
-
-    audit_id = generate_id()
-    execute(
-        "INSERT INTO t_audit_record (id, record_id, user_id, content, audit_type, audit_result, create_time) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-        (
-            audit_id,
-            record_id,
-            user_id,
-            answer[:500] if answer else "",
-            1,
-            1 if output_audit["passed"] else 2,
-            datetime.utcnow(),
-        ),
-    )
-
-    execute("UPDATE t_ai_tool SET use_count = use_count + %s WHERE id = %s", (gen_tokens, tool_id))
-
-    return success_response({"result": answer, "recordId": record_id})
-
-
-@ai_bp.get("/ai/generate/task/<string:task_id>")
-@jwt_required(optional=True)
-def generate_task_status(task_id: str):
-    data = get_redis_client().get(f"ai_task:{task_id}")
-    if not data:
-        raise AppError(ErrorCode.GENERATE_TASK_NOT_FOUND, "异步任务不存在")
-    return success_response({"status": 0, "result": None, "taskMeta": data})

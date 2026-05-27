@@ -1,12 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const TOKEN_KEY = 'token'
-const REFRESH_TOKEN_KEY = 'refreshToken'
+const USER_KEY = 'userInfo'
 
 function loadUser() {
   try {
-    const raw = localStorage.getItem('userInfo')
+    const raw = localStorage.getItem(USER_KEY)
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
@@ -14,34 +13,61 @@ function loadUser() {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref(localStorage.getItem(TOKEN_KEY) || '')
-  const refreshToken = ref(localStorage.getItem(REFRESH_TOKEN_KEY) || '')
   const userInfo = ref(loadUser())
+  const sessionChecked = ref(false)
 
-  const isLoggedIn = () => !!token.value
+  const isLoggedIn = () => !!userInfo.value
 
-  const setAuth = (t, rt, info) => {
-    token.value = t
-    refreshToken.value = rt || ''
+  const setUserInfo = (info) => {
     userInfo.value = info
-    localStorage.setItem(TOKEN_KEY, t)
-    if (rt) localStorage.setItem(REFRESH_TOKEN_KEY, rt)
-    localStorage.setItem('userInfo', JSON.stringify(info))
+    if (info) {
+      localStorage.setItem(USER_KEY, JSON.stringify(info))
+    } else {
+      localStorage.removeItem(USER_KEY)
+    }
   }
 
   const updateUserInfo = (info) => {
     userInfo.value = { ...userInfo.value, ...info }
-    localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+    localStorage.setItem(USER_KEY, JSON.stringify(userInfo.value))
   }
 
-  const logout = () => {
-    token.value = ''
-    refreshToken.value = ''
-    userInfo.value = null
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(REFRESH_TOKEN_KEY)
-    localStorage.removeItem('userInfo')
+  const checkSession = async () => {
+    try {
+      const { default: http } = await import('../api/http.js')
+      const res = await http.get('/user/session')
+      setUserInfo(res.data.userInfo)
+      sessionChecked.value = true
+      return true
+    } catch {
+      setUserInfo(null)
+      sessionChecked.value = true
+      return false
+    }
   }
 
-  return { token, refreshToken, userInfo, isLoggedIn, setAuth, updateUserInfo, logout }
+  const refreshCredits = async () => {
+    try {
+      const { default: http } = await import('../api/http.js')
+      const res = await http.get('/user/info')
+      if (userInfo.value) {
+        userInfo.value.credits = res.data.credits
+        localStorage.setItem(USER_KEY, JSON.stringify(userInfo.value))
+      }
+    } catch {
+      // best-effort
+    }
+  }
+
+  const logout = async () => {
+    try {
+      const { default: http } = await import('../api/http.js')
+      await http.post('/user/logout')
+    } catch {
+      // best-effort
+    }
+    setUserInfo(null)
+  }
+
+  return { userInfo, sessionChecked, isLoggedIn, setUserInfo, updateUserInfo, checkSession, refreshCredits, logout }
 })

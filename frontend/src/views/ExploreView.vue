@@ -1,12 +1,13 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getToolList } from '../api/tool'
+import { chatApi } from '../api/chat'
 import { characterApi } from '../api/character'
 import BaseInput from '../components/base/BaseInput.vue'
 import BasePagination from '../components/base/BasePagination.vue'
+import BaseTooltip from '../components/base/BaseTooltip.vue'
 import AppLayout from '../layouts/AppLayout.vue'
-import { formatTokens, formatHot, formatScore } from '../utils/format'
+import { formatTokens, formatHot } from '../utils/format'
 
 const { t } = useI18n()
 
@@ -84,38 +85,34 @@ const fetchList = async () => {
         pageNum: params.pageNum,
         pageSize: params.pageSize,
       }
-      if (params.categoryId) charParams.categoryId = params.categoryId
+      if (params.categoryId) charParams.category = params.categoryId
       const response = await characterApi.getList(charParams)
-      // Map character fields to tool-compatible format
       const mappedList = response.data.list.map(item => {
-        // Parse comma-separated text tags into [{id, name}] format
-        const tagList = item.tags
-          ? item.tags.split(',').filter(Boolean).map((name, i) => ({
-              id: Math.abs(hashCode(name)) % 900 + 100 + i,
-              name: name.trim()
-            }))
-          : []
-        const tokens = Number(item.view_count || 0)
-        const likes = Number(item.like_count || 0)
+        const tags = Array.isArray(item.tags) ? item.tags : []
+        const tagList = tags.map((name, i) => ({
+          id: Math.abs(hashCode(String(name))) % 900 + 100 + i,
+          name: String(name).trim()
+        }))
+        const views = Number(item.viewCount || 0)
+        const likes = Number(item.likeCount || 0)
         let honorTier = null
-        if (tokens >= 1000000 || likes >= 50000) honorTier = 'gold'
-        else if (tokens >= 100000 || likes >= 10000) honorTier = 'silver'
-        else if (tokens >= 10000) honorTier = 'bronze'
+        if (views >= 1000000 || likes >= 50000) honorTier = 'gold'
+        else if (views >= 100000 || likes >= 10000) honorTier = 'silver'
+        else if (views >= 10000) honorTier = 'bronze'
         return {
           id: item.id,
           name: item.name,
           icon: item.avatar || '',
-          desc: item.description || '',
-          useCount: tokens,
+          desc: item.desc || '',
+          useCount: Number(item.useCount || 0),
           likeCount: likes,
-          collectCount: item.collect_count || 0,
-          favoritesCount: item.favorites_count || item.collect_count || 0,
+          collectCount: Number(item.collectCount || 0),
+          favoritesCount: item.favoritesCount || item.collectCount || 0,
           isFree: true,
           isVip: false,
-          createTime: item.create_time,
-          categoryId: item.category_id,
+          createTime: item.createTime,
+          categoryId: item.category,
           tags: tagList,
-          rating: item.rating || 0,
           honorTier,
           _type: 'character',
         }
@@ -126,8 +123,8 @@ const fetchList = async () => {
       listData.value.pageSize = response.data.pageSize
     } else {
       // Tools/works channel
-      const response = await getToolList(params)
-      listData.value.list = response.data.list.map(item => ({ ...item, _type: 'tool' }))
+      const response = await chatApi.getWorks(params)
+      listData.value.list = response.data.list.map(item => ({ ...item, _type: 'work' }))
       listData.value.total = response.data.total
       listData.value.pageNum = response.data.pageNum
       listData.value.pageSize = response.data.pageSize
@@ -247,8 +244,12 @@ onMounted(fetchList)
             </div>
           </div>
           <div class="card-body">
-            <h3 class="card-title">{{ item.name }}</h3>
-            <p class="card-desc">{{ item.desc }}</p>
+            <BaseTooltip :text="item.name">
+              <h3 class="card-title">{{ item.name }}</h3>
+            </BaseTooltip>
+            <BaseTooltip :text="item.desc">
+              <p class="card-desc">{{ item.desc }}</p>
+            </BaseTooltip>
             <div class="card-meta">
               <span>{{ t('discovery.platform_created') }}</span>
               <span :class="item.isFree ? 'tag-free' : 'tag-vip'">
@@ -260,10 +261,6 @@ onMounted(fetchList)
               <span class="char-stat">☆ {{ formatHot(item.collectCount) }}</span>
             </div>
             <div v-else class="card-footer">
-              <div class="score">
-                <span class="score-star">★</span>
-                <span class="score-value">{{ formatScore(item) }}</span>
-              </div>
               <span class="update-badge">{{ t('discovery.updated') }}</span>
             </div>
           </div>

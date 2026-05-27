@@ -5,7 +5,7 @@ from flask import Blueprint, request, g
 from flask_jwt_extended import jwt_required
 
 from ...services.monitoring import MonitoringService
-from ...extensions import get_redis_client, get_mongo_db
+from ...extensions import get_redis_client
 from ...utils.mysql import get_mysql_connection
 from ...utils.logger import Logger
 from ...utils.response import success_response
@@ -16,7 +16,7 @@ monitoring_bp = Blueprint("monitoring", __name__)
 def get_monitoring_service():
     """Get monitoring service instance"""
     logger = Logger("monitoring")
-    return MonitoringService(get_redis_client(), get_mongo_db(), get_mysql_connection(), logger)
+    return MonitoringService(get_redis_client(), get_mysql_connection(), logger)
 
 
 @monitoring_bp.get("/monitoring/health")

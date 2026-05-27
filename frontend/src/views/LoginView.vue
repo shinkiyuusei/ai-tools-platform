@@ -24,7 +24,7 @@ const handleLogin = async () => {
   loading.value = true
   try {
     const res = await login({ ...form.value })
-    auth.setAuth(res.data.token, res.data.refreshToken, res.data.userInfo)
+    auth.setUserInfo(res.data.userInfo)
     router.push('/create')
   } catch (err) {
     errorMsg.value = err.message || '登录失败'

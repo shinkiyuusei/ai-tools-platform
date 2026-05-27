@@ -15,9 +15,8 @@ class MonitoringService:
     - Resource usage monitoring
     """
     
-    def __init__(self, redis_client, mongo_client, mysql_client, logger):
+    def __init__(self, redis_client, mysql_client, logger):
         self.redis = redis_client
-        self.mongo = mongo_client
         self.mysql = mysql_client
         self.logger = logger
     
@@ -35,9 +34,6 @@ class MonitoringService:
         self.redis.lpush(f"metrics:{metric_name}", str(metric_data))
         self.redis.ltrim(f"metrics:{metric_name}", 0, 9999)
         self.redis.expire(f"metrics:{metric_name}", 3600)
-        
-        # Store in MongoDB for long-term storage
-        self.mongo["t_metrics"].insert_one(metric_data)
     
     def check_health(self) -> Dict:
         """
@@ -56,14 +52,6 @@ class MonitoringService:
             health_status["checks"]["redis"] = {"status": "healthy", "latency_ms": self._check_redis_latency()}
         except Exception as e:
             health_status["checks"]["redis"] = {"status": "unhealthy", "error": str(e)}
-            health_status["status"] = "degraded"
-        
-        # Check MongoDB
-        try:
-            self.mongo.admin.command('ping')
-            health_status["checks"]["mongodb"] = {"status": "healthy"}
-        except Exception as e:
-            health_status["checks"]["mongodb"] = {"status": "unhealthy", "error": str(e)}
             health_status["status"] = "degraded"
         
         # Check MySQL

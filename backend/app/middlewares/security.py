@@ -128,8 +128,3 @@ def log_security_event(event_type: str, details: dict):
     client.lpush('security_events', str(log_entry))
     client.ltrim('security_events', 0, 9999)
     client.expire('security_events', 86400)
-    
-    # Also store in MongoDB for long-term storage
-    from ...extensions import get_mongo_db
-    mongo = get_mongo_db()
-    mongo['t_security_logs'].insert_one(log_entry)

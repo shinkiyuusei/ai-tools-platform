@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import CharacterChatView from '../views/CharacterChatView.vue'
 import CharacterDetailView from '../views/CharacterDetailView.vue'
 import ChatView from '../views/ChatView.vue'
 import ErrorView from '../views/ErrorView.vue'
@@ -9,18 +10,18 @@ import ForgotPasswordView from '../views/ForgotPasswordView.vue'
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
-import ToolDetailView from '../views/ToolDetailView.vue'
 import UserCenterView from '../views/UserCenterView.vue'
 import CharacterManageView from '../views/admin/CharacterManageView.vue'
 import TagManageView from '../views/admin/TagManageView.vue'
-import ToolManageView from '../views/admin/ToolManageView.vue'
+import UserManageView from '../views/admin/UserManageView.vue'
+import WorkManageView from '../views/admin/WorkManageView.vue'
 
 const routes = [
   { path: '/', redirect: '/explore' },
   { path: '/create', name: 'home', component: HomeView },
   { path: '/explore', name: 'explore', component: ExploreView },
-  { path: '/tool/:toolId', name: 'tool-detail', component: ToolDetailView, props: true },
   { path: '/chat/:workId', name: 'chat', component: ChatView },
+  { path: '/chat/character/:id', name: 'character-chat', component: CharacterChatView },
   { path: '/character/:id', name: 'character-detail', component: CharacterDetailView },
   { path: '/usercenter', name: 'user-center', component: UserCenterView, meta: { requiresAuth: true } },
   { path: '/favorites', name: 'favorites', component: FavoritesView, meta: { requiresAuth: true } },
@@ -29,8 +30,9 @@ const routes = [
   { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordView },
   { path: '/error/:code', name: 'error', component: ErrorView, props: true },
   { path: '/admin/tag', name: 'admin-tag', component: TagManageView, meta: { requiresAuth: true } },
-  { path: '/admin/tool', name: 'admin-tool', component: ToolManageView, meta: { requiresAuth: true } },
+  { path: '/admin/user', name: 'admin-user', component: UserManageView, meta: { requiresAuth: true } },
   { path: '/admin/character', name: 'admin-character', component: CharacterManageView, meta: { requiresAuth: true } },
+  { path: '/admin/work', name: 'admin-work', component: WorkManageView, meta: { requiresAuth: true } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: ErrorView, props: { code: 404 } },
 ]
 
@@ -39,26 +41,25 @@ const router = createRouter({
   routes,
 })
 
-function checkIsAdmin() {
-  const token = localStorage.getItem('token')
-  if (!token) return false
+function isAdmin() {
+  const userInfo = localStorage.getItem('userInfo')
+  if (!userInfo) return false
   try {
-    const raw = localStorage.getItem('userInfo')
-    const userInfo = raw ? JSON.parse(raw) : null
-    return (userInfo?.vipLevel || 0) >= 2
+    return (JSON.parse(userInfo)?.vipLevel || 0) >= 2
   } catch {
     return false
   }
 }
 
-router.beforeEach((to) => {
-  const token = localStorage.getItem('token')
+router.beforeEach(async (to) => {
+  const userInfo = localStorage.getItem('userInfo')
+  const hasUser = !!userInfo
 
-  if (to.meta.requiresAuth && !token) {
+  if (to.meta.requiresAuth && !hasUser) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
 
-  if (to.path.startsWith('/admin') && !checkIsAdmin()) {
+  if (to.path.startsWith('/admin') && !isAdmin()) {
     return { name: 'explore' }
   }
 

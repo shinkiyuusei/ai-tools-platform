@@ -1,12 +1,9 @@
 import json
-import uuid
-from datetime import datetime
 
 import requests
 from flask import current_app
 
 from ...core.errors import AppError, ErrorCode
-from ...extensions import get_mongo_db, get_redis_client
 
 TOKEN_USAGE_SIGNAL = "\0[TOKENS]"
 
@@ -21,26 +18,6 @@ class DeepSeekAdapter:
         return {
             "Authorization": f"Bearer {self.config['api_key']}",
             "Content-Type": "application/json",
-        }
-
-    def generate_text(self, prompt: str, thinking_mode: bool = False):
-        model = self.config["reasoner_model"] if thinking_mode else self.config["chat_model"]
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-        }
-        response = requests.post(
-            f"{self.config['base_url']}/chat/completions",
-            json=payload,
-            headers=self._headers(),
-            timeout=60,
-        )
-        response.raise_for_status()
-        body = response.json()
-        return {
-            "content": body["choices"][0]["message"]["content"],
-            "total_tokens": body.get("usage", {}).get("total_tokens", 0),
         }
 
     def chat_completion(
@@ -125,36 +102,3 @@ class DeepSeekAdapter:
 
         yield f"{TOKEN_USAGE_SIGNAL}{total_tokens}\0"
 
-    def submit_async_task(self, tool_id: int, user_id: int, params: dict, tool_name: str = "", thinking_mode: bool = False):
-        task_id = f"task_{uuid.uuid4().hex[:16]}"
-        record_id = f"record_{uuid.uuid4().hex[:16]}"
-
-        task_payload = {
-            "taskId": task_id,
-            "recordId": record_id,
-            "toolId": tool_id,
-            "userId": user_id,
-            "params": params,
-            "thinkingMode": thinking_mode,
-            "status": 0,
-            "result": None,
-        }
-        get_redis_client().setex(f"ai_task:{task_id}", 3600, json.dumps(task_payload, default=str))
-        get_mongo_db()["t_generate_record"].insert_one(
-            {
-                "recordId": record_id,
-                "userId": user_id,
-                "toolId": tool_id,
-                "toolName": tool_name or "未知工具",
-                "params": params,
-                "result": "",
-                "status": 0,
-                "createTime": datetime.utcnow(),
-                "isCollected": 0,
-            }
-        )
-
-        from ..task_worker import submit_async_task
-        submit_async_task(task_payload)
-
-        return {"taskId": task_id, "recordId": record_id}

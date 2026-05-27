@@ -3,16 +3,35 @@ import axios from 'axios'
 const http = axios.create({
   baseURL: '/api/v1',
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json;charset=UTF-8',
+    'X-Requested-With': 'XMLHttpRequest',
   },
 })
 
+let isRefreshing = false
+let pendingRequests = []
+
+function resolvePendingRequests() {
+  pendingRequests.forEach((cb) => cb())
+  pendingRequests = []
+}
+
+function rejectPendingRequests() {
+  pendingRequests.forEach((cb) => cb(null))
+  pendingRequests = []
+}
+
 http.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    // Attach CSRF token from non-httpOnly cookie (set by Flask-JWT-Extended)
+    const csrfToken = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('csrf_access_token='))
+      ?.split('=')[1]
+    if (csrfToken) {
+      config.headers['X-CSRF-TOKEN'] = csrfToken
     }
 
     if (config.method === 'get') {
@@ -41,7 +60,41 @@ http.interceptors.response.use(
     }
     return data
   },
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config
+    const status = error.response?.status
+
+    if (status === 401 && !originalRequest._retry) {
+      if (!isRefreshing) {
+        isRefreshing = true
+        originalRequest._retry = true
+
+        try {
+          await axios.post('/api/v1/user/refresh', {}, { withCredentials: true })
+          resolvePendingRequests()
+          return http(originalRequest)
+        } catch {
+          rejectPendingRequests()
+          // Clear auth state
+          try {
+            await axios.post('/api/v1/user/logout', {}, { withCredentials: true })
+          } catch {
+            // ignore
+          }
+          window.dispatchEvent(new CustomEvent('app:auth-expired'))
+          return Promise.reject(error)
+        } finally {
+          isRefreshing = false
+        }
+      } else {
+        return new Promise((resolve) => {
+          pendingRequests.push(() => {
+            resolve(http(originalRequest))
+          })
+        })
+      }
+    }
+
     const message = error.response?.data?.message || error.message || '网络异常，请稍后重试'
     window.dispatchEvent(new CustomEvent('app:error', { detail: message }))
     return Promise.reject(error)
