@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS t_work_card (
   openings JSON,
   tags JSON,
   role_config JSON NOT NULL,
+  content JSON NOT NULL,
   use_count BIGINT NOT NULL DEFAULT 0,
   status TINYINT NOT NULL DEFAULT 1,
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -145,6 +146,18 @@ CREATE TABLE IF NOT EXISTS t_work_collect (
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uk_user_work (user_id, work_id),
   INDEX idx_work_id (work_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 每日对话统计表（用于日榜/周榜/月榜）
+CREATE TABLE IF NOT EXISTS t_cards_daily_stat (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  card_type VARCHAR(16) NOT NULL DEFAULT 'work',
+  card_id BIGINT NOT NULL,
+  stat_date DATE NOT NULL,
+  chat_count INT NOT NULL DEFAULT 1,
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_card_date (card_type, card_id, stat_date),
+  INDEX idx_type_date_count (card_type, stat_date, chat_count DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 对话会话表

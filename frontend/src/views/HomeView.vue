@@ -1,15 +1,33 @@
 <script setup>
-import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { chatApi } from '../api/chat'
+import { notifySuccess, notifyError } from '../utils/notify';
+import { characterApi } from '../api/character'
+import { useAuthStore } from '../stores/auth'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 
 const router = useRouter()
+const route = useRoute()
 const saving = ref(false)
+const isEdit = ref(false)
+const editingWorkId = ref(null)
 const uploading = ref(false)
 const activeSection = ref('basic')
+const createMode = ref('work') // 'work' | 'character'
+const characterSaving = ref(false)
+const characterUploading = ref(false)
+const tagInput = ref('')
+
+const characterForm = reactive({
+  name: '',
+  desc: '',
+  avatar: '',
+  tags: [],
+  personaContent: '',
+})
 
 const form = reactive({
   name: '',
@@ -23,6 +41,66 @@ const form = reactive({
   statusBar: '',
   openings: [{ label: '', text: '' }],
 })
+
+const EMPTY_WORK_FORM = {
+  name: '', desc: '', detailedIntro: '', icon: '', characters: [],
+  protagonist: { name: '', description: '', motivation: '' },
+  worldSetting: { worldName: '', eraTech: '', coreConflict: '', toneAtmosphere: '', mainPlot: '', initialState: '' },
+  gameRules: '', statusBar: '', openings: [{ label: '', text: '' }],
+}
+
+const EMPTY_CHARACTER_FORM = {
+  name: '', desc: '', avatar: '', tags: [], personaContent: '',
+}
+
+function resetWorkForm() {
+  Object.assign(form, JSON.parse(JSON.stringify(EMPTY_WORK_FORM)))
+}
+
+function resetCharacterForm() {
+  Object.assign(characterForm, JSON.parse(JSON.stringify(EMPTY_CHARACTER_FORM)))
+}
+
+async function fetchWorkForEdit(workId) {
+  try {
+    const res = await chatApi.getWorkConfig(workId)
+    const w = res.data
+    form.name = w.name || ''
+    form.desc = w.desc || ''
+    form.detailedIntro = w.detailedIntro || ''
+    form.icon = w.icon || ''
+    form.characters = (w.characters || []).map(c => ({
+      name: c.name || '',
+      occupation: c.occupation || '',
+      age: c.age || '',
+      gender: c.gender || '',
+      appearance: c.appearance || '',
+      personality: c.personality || '',
+      speechTone: c.speechTone || '',
+      background: c.background || '',
+    }))
+    form.protagonist = {
+      name: w.protagonist?.name || '',
+      description: w.protagonist?.description || '',
+      motivation: w.protagonist?.motivation || '',
+    }
+    form.worldSetting = {
+      worldName: w.worldSetting?.worldName || '',
+      eraTech: w.worldSetting?.eraTech || '',
+      coreConflict: w.worldSetting?.coreConflict || '',
+      toneAtmosphere: w.worldSetting?.toneAtmosphere || '',
+      mainPlot: w.worldSetting?.mainPlot || '',
+      initialState: w.worldSetting?.initialState || '',
+    }
+    form.gameRules = w.gameRules || ''
+    form.statusBar = w.statusBar || ''
+    const openings = w.openingStatements || []
+    form.openings = openings.length ? openings.map(o => ({ label: o.label || '', text: o.text || '' })) : [{ label: '', text: '' }]
+  } catch (err) {
+    notifyError('加载作品数据失败')
+    router.replace('/create')
+  }
+}
 
 function addCharacter() {
   if (form.characters.length >= 10) return
@@ -52,11 +130,80 @@ const sections = [
   { key: 'cover', label: '封面' },
 ]
 
+function switchMode(mode) {
+  createMode.value = mode
+  activeSection.value = 'basic'
+}
+
+function addTag() {
+  const text = tagInput.value.trim()
+  if (!text || characterForm.tags.length >= 5) return
+  if (characterForm.tags.includes(text)) return
+  characterForm.tags.push(text)
+  tagInput.value = ''
+}
+
+function removeTag(index) {
+  characterForm.tags.splice(index, 1)
+}
+
+function handleTagKeydown(e) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault()
+    addTag()
+  }
+}
+
+async function uploadCharacterAvatar(file) {
+  characterUploading.value = true
+  try {
+    const res = await characterApi.uploadAvatar(file)
+    characterForm.avatar = res.data.url
+  } catch (err) {
+    notifyError('头像上传失败')
+  } finally {
+    characterUploading.value = false
+  }
+}
+
+function handleCharacterFileChange(e) {
+  const file = e.target.files?.[0]
+  if (file) uploadCharacterAvatar(file)
+}
+
+function handleCharacterDrop(e) {
+  const file = e.dataTransfer?.files?.[0]
+  if (file) uploadCharacterAvatar(file)
+}
+
+async function handleSaveCharacter() {
+  if (!characterForm.name.trim() || !characterForm.desc.trim() || !characterForm.personaContent.trim()) return
+  characterSaving.value = true
+  try {
+    const authStore = useAuthStore()
+    const res = await characterApi.create({
+      name: characterForm.name.trim(),
+      desc: characterForm.desc.trim(),
+      avatar: characterForm.avatar.trim(),
+      author: authStore.userInfo?.nickname || '',
+      language: 'zh-Hans',
+      tags: characterForm.tags,
+      personaContent: characterForm.personaContent.trim(),
+      isPublic: 1,
+    })
+    router.push(`/chat/character/${res.data.id}`)
+  } catch (err) {
+    notifyError(err.message || '保存失败')
+  } finally {
+    characterSaving.value = false
+  }
+}
+
 async function handleSave() {
   if (!form.name.trim() || !form.desc.trim()) return
   saving.value = true
   try {
-    const res = await chatApi.createWork({
+    const payload = {
       name: form.name.trim(),
       desc: form.desc.trim(),
       detailedIntro: form.detailedIntro.trim(),
@@ -68,10 +215,17 @@ async function handleSave() {
       statusBar: form.statusBar.trim(),
       openingStatements: form.openings.filter(o => o.text.trim()),
       models: ['deepseek-v4-flash'],
-    })
-    router.push(`/chat/${res.data.id}`)
+    }
+    if (isEdit.value && editingWorkId.value) {
+      await chatApi.updateWork(editingWorkId.value, payload)
+      notifySuccess('作品修改成功')
+      router.push(`/chat/${editingWorkId.value}`)
+    } else {
+      const res = await chatApi.createWork(payload)
+      router.push(`/chat/${res.data.id}`)
+    }
   } catch (err) {
-    window.dispatchEvent(new CustomEvent('app:error', { detail: err.message || '保存失败' }))
+    notifyError(err.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -83,7 +237,7 @@ async function uploadFile(file) {
     const res = await chatApi.uploadCover(file)
     form.icon = res.data.url
   } catch (err) {
-    window.dispatchEvent(new CustomEvent('app:error', { detail: '封面上传失败' }))
+    notifyError('封面上传失败')
   } finally {
     uploading.value = false
   }
@@ -108,6 +262,25 @@ function useStatusTemplate() {
   form.statusBar = statusTemplate
 }
 
+onMounted(() => {
+  const mode = route.query.mode
+  const editId = route.query.edit
+
+  if (mode) {
+    createMode.value = mode === 'character' ? 'character' : 'work'
+  }
+
+  if (editId) {
+    const id = parseInt(editId, 10)
+    if (!isNaN(id) && id > 0) {
+      isEdit.value = true
+      editingWorkId.value = id
+      createMode.value = 'work'
+      fetchWorkForEdit(id)
+    }
+  }
+})
+
 const charFields = [
   { key: 'name', label: '姓名 *', placeholder: '角色姓名' },
   { key: 'occupation', label: '职业 *', placeholder: '角色职业' },
@@ -124,11 +297,18 @@ const charFields = [
   <AppLayout>
     <div class="create-page animate-fade-in">
       <div class="create-header">
-        <h1>创建作品卡</h1>
-        <p>填写以下信息，构建你的 AI 互动故事世界</p>
+        <h1 v-if="isEdit">编辑作品卡</h1>
+        <h1 v-else>{{ createMode === 'work' ? '创建作品卡' : '创建角色卡' }}</h1>
+        <p v-if="isEdit">修改作品信息，保存后立即生效</p>
+        <p v-else>{{ createMode === 'work' ? '填写以下信息，构建你的 AI 互动故事世界' : '创建 AI 角色，用于 1v1 角色对话' }}</p>
       </div>
 
-      <div class="section-nav">
+      <div v-if="!isEdit" class="mode-tabs">
+        <button :class="{ active: createMode === 'work' }" @click="switchMode('work')">创建作品卡</button>
+        <button :class="{ active: createMode === 'character' }" @click="switchMode('character')">创建角色卡</button>
+      </div>
+
+      <div v-if="createMode === 'work'" class="section-nav">
         <button
           v-for="sec in sections"
           :key="sec.key"
@@ -137,7 +317,7 @@ const charFields = [
         >{{ sec.key === 'characters' ? `角色设定 (${form.characters.length}/10)` : sec.label }}</button>
       </div>
 
-      <div class="form-body">
+      <div v-if="createMode === 'work'" class="form-body">
         <!-- 基础信息 -->
         <section v-show="activeSection === 'basic'" class="form-section">
           <div class="field">
@@ -277,10 +457,69 @@ const charFields = [
         </section>
       </div>
 
+      <!-- 角色卡表单 -->
+      <div v-if="createMode === 'character'" class="form-body">
+        <section class="form-section">
+          <div class="field">
+            <label>角色名称 <span class="required">*</span></label>
+            <BaseInput v-model="characterForm.name" placeholder="给你的角色起个名字" />
+          </div>
+          <div class="field">
+            <label>简介 <span class="required">*</span></label>
+            <textarea v-model="characterForm.desc" class="field-textarea" rows="3" placeholder="简要描述角色，展示给其他玩家" />
+          </div>
+          <div class="field">
+            <label>头像上传</label>
+            <div class="upload-area" @click="$refs.charFileInput?.click()" @dragover.prevent @drop.prevent="handleCharacterDrop">
+              <input ref="charFileInput" type="file" accept="image/*" class="file-input-hidden" @change="handleCharacterFileChange" />
+              <div v-if="!characterForm.avatar && !characterUploading" class="upload-placeholder">
+                <span class="upload-icon">+</span>
+                <span>点击或拖拽上传头像图片</span>
+              </div>
+              <div v-else-if="characterUploading" class="upload-placeholder">
+                <span>上传中...</span>
+              </div>
+              <div v-else class="cover-preview-mini">
+                <img :src="characterForm.avatar" alt="头像预览" />
+                <button class="btn-change-cover" @click.stop="characterForm.avatar = ''">更换</button>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>标签 ({{ characterForm.tags.length }}/5)</label>
+            <div class="tags-input-wrap">
+              <div v-for="(tag, idx) in characterForm.tags" :key="idx" class="tag-chip">
+                <span>{{ tag }}</span>
+                <button class="tag-chip-x" @click="removeTag(idx)">×</button>
+              </div>
+              <input
+                v-if="characterForm.tags.length < 5"
+                v-model="tagInput"
+                class="tag-input"
+                placeholder="输入标签，回车添加"
+                @keydown="handleTagKeydown"
+                @blur="addTag"
+              />
+            </div>
+          </div>
+          <div class="field">
+            <label>核心人设 <span class="required">*</span></label>
+            <textarea v-model="characterForm.personaContent" class="field-textarea field-textarea-mono" rows="12" placeholder="用自然语言详细描述角色的人设——性格、外貌、语气、背景、说话方式等，将作为 AI 对话的 system prompt 使用" />
+          </div>
+        </section>
+      </div>
+
       <div class="form-footer">
-        <BaseButton :loading="saving" :disabled="!form.name.trim() || !form.desc.trim()" size="lg" @click="handleSave">
-          保存并发布作品卡
-        </BaseButton>
+        <template v-if="createMode === 'work'">
+          <BaseButton :loading="saving" :disabled="!form.name.trim() || !form.desc.trim()" size="lg" @click="handleSave">
+            {{ isEdit ? '保存修改' : '保存并发布作品卡' }}
+          </BaseButton>
+        </template>
+        <template v-else>
+          <BaseButton :loading="characterSaving" :disabled="!characterForm.name.trim() || !characterForm.desc.trim() || !characterForm.personaContent.trim()" size="lg" @click="handleSaveCharacter">
+            保存并发布角色卡
+          </BaseButton>
+        </template>
       </div>
     </div>
   </AppLayout>
@@ -309,6 +548,36 @@ const charFields = [
 }
 
 /* section nav */
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: var(--space-xl);
+  justify-content: center;
+}
+
+.mode-tabs button {
+  padding: 10px 24px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.mode-tabs button:hover {
+  color: var(--text-secondary);
+  background: var(--bg-card);
+}
+
+.mode-tabs button.active {
+  color: var(--color-misty-blue-soft);
+  background: rgba(123, 156, 191, 0.1);
+  border-color: rgba(123, 156, 191, 0.2);
+}
+
 .section-nav {
   display: flex;
   gap: 4px;
@@ -560,6 +829,71 @@ const charFields = [
 .btn-add-opening:hover {
   border-color: var(--color-misty-blue-soft);
   color: var(--color-misty-blue-soft);
+}
+
+.field-textarea-mono {
+  font-family: var(--font-mono, 'Consolas', 'Monaco', monospace);
+  font-size: 13px;
+}
+
+/* tags */
+.tags-input-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  min-height: 42px;
+  transition: border-color var(--transition-fast);
+}
+
+.tags-input-wrap:focus-within {
+  border-color: var(--border-focus);
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(123, 156, 191, 0.12);
+  border: 1px solid rgba(123, 156, 191, 0.2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-misty-blue-soft);
+}
+
+.tag-chip-x {
+  font-size: 12px;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.tag-chip-x:hover {
+  opacity: 1;
+}
+
+.tag-input {
+  flex: 1;
+  min-width: 100px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  outline: none;
+  padding: 2px 0;
+}
+
+.tag-input::placeholder {
+  color: var(--text-tertiary);
 }
 
 /* footer */

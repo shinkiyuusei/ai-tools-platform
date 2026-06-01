@@ -11,6 +11,8 @@ import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import UserCenterView from '../views/UserCenterView.vue'
+import CharacterCardView from '../views/CharacterCardView.vue'
+import WorkCardView from '../views/WorkCardView.vue'
 import CharacterManageView from '../views/admin/CharacterManageView.vue'
 import TagManageView from '../views/admin/TagManageView.vue'
 import UserManageView from '../views/admin/UserManageView.vue'
@@ -24,6 +26,8 @@ const routes = [
   { path: '/chat/character/:id', name: 'character-chat', component: CharacterChatView },
   { path: '/character/:id', name: 'character-detail', component: CharacterDetailView },
   { path: '/usercenter', name: 'user-center', component: UserCenterView, meta: { requiresAuth: true } },
+  { path: '/my-characters', name: 'my-characters', component: CharacterCardView, meta: { requiresAuth: true } },
+  { path: '/my-works', name: 'my-works', component: WorkCardView, meta: { requiresAuth: true } },
   { path: '/favorites', name: 'favorites', component: FavoritesView, meta: { requiresAuth: true } },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/register', name: 'register', component: RegisterView },

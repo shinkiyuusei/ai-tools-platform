@@ -9,6 +9,8 @@ from ...services.ai.deepseek import DeepSeekAdapter, TOKEN_USAGE_SIGNAL
 from ...services.audit import audit_content
 from ...services.chat.prompt_builder import parse_character_states
 from ...services.credit import deduct, get_balance
+from datetime import date
+
 from ...utils.mysql import execute, query_one
 from ...utils.response import success_response
 
@@ -22,6 +24,18 @@ def _add_token_usage(entity_id: int, tokens: int, entity_type: str = "work"):
     execute(
         f"UPDATE {table} SET use_count = use_count + %s WHERE id = %s",
         (tokens, entity_id),
+    )
+
+
+def _increment_daily_stat(card_type, card_id):
+    if not card_id:
+        return
+    today = date.today().isoformat()
+    execute(
+        "INSERT INTO t_cards_daily_stat (card_type, card_id, stat_date, chat_count) "
+        "VALUES (%s, %s, %s, 1) "
+        "ON DUPLICATE KEY UPDATE chat_count = chat_count + 1",
+        (card_type, card_id, today),
     )
 
 
@@ -177,6 +191,7 @@ def chat_completions():
 
     total_tokens = result.get("usage", {}).get("total_tokens", 0)
     _add_token_usage(entity_id, total_tokens, entity_type)
+    _increment_daily_stat(entity_type, entity_id)
     _check_and_deduct_credits(user_id, total_tokens, conversation_id=conversation_id)
 
     return success_response(
@@ -325,6 +340,7 @@ def chat_completions_stream():
         # Accumulate token usage to the work/character card
         if stream_tokens:
             _add_token_usage(entity_id, stream_tokens, entity_type)
+            _increment_daily_stat(entity_type, entity_id)
             try:
                 _check_and_deduct_credits(user_id, stream_tokens, conversation_id=conversation_id)
             except AppError:

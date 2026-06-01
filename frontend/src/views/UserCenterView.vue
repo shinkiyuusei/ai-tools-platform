@@ -1,11 +1,13 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { getUserInfo, updateUserInfo } from '../api/user'
 import { useAuthStore } from '../stores/auth'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 
+const router = useRouter()
 const auth = useAuthStore()
 
 const activeMenu = ref('account')
@@ -14,7 +16,9 @@ const editForm = ref({ nickname: '', avatar: '' })
 const saveLoading = ref(false)
 
 const menuItems = [
-  { key: 'favorites', label: '我的收藏', icon: '♥' },
+  { key: 'characters', label: '我的角色', icon: '◇', route: '/my-characters' },
+  { key: 'works', label: '我的作品', icon: '◇', route: '/my-works' },
+  { key: 'favorites', label: '我的收藏', icon: '♥', route: '/favorites' },
   { key: 'account', label: '账号设置', icon: '⚙' },
   { key: 'security', label: '安全中心', icon: '🔒' },
 ]
@@ -44,6 +48,11 @@ const handleSaveInfo = async () => {
 }
 
 const switchMenu = (key) => {
+  const item = menuItems.find(m => m.key === key)
+  if (item?.route) {
+    router.push(item.route)
+    return
+  }
   activeMenu.value = key
 }
 

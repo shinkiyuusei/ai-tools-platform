@@ -13,6 +13,7 @@ from ...utils.crud import dynamic_update
 from ...utils.mysql import query_one, query_all, execute
 from ...utils.response import success_response, page_response
 from ...core.errors import AppError, ErrorCode
+from ...api.v1.ai import _increment_daily_stat
 from ...services.ai.deepseek import DeepSeekAdapter, TOKEN_USAGE_SIGNAL
 from ...services.audit import audit_content
 from ...services.cache import (
@@ -82,41 +83,64 @@ def get_character_list():
     page_size = min(int(request.args.get("pageSize", 12)), 50)
     user_id = request.args.get("userId", type=int)
     sort_type = request.args.get("sortType", "new")
+    rank_type = request.args.get("rankType", "total")
     keyword = request.args.get("keyword", "")
     category = request.args.get("category", type=int)
 
-    where = ["status = 1", "is_public = 1"]
+    where = ["c.status = 1", "c.is_public = 1"]
     params = []
 
     if user_id:
-        where.append("user_id = %s")
+        where.append("c.user_id = %s")
         params.append(user_id)
 
     if keyword:
-        where.append("(name LIKE %s OR `desc` LIKE %s)")
+        where.append("(c.name LIKE %s OR c.`desc` LIKE %s)")
         params.extend([f"%{keyword}%", f"%{keyword}%"])
 
     if category:
-        where.append("category = %s")
+        where.append("c.category = %s")
         params.append(category)
 
     where_clause = " AND ".join(where)
 
-    order_map = {
-        "new": "create_time DESC",
-        "hot": "use_count DESC",
-        "like": "like_count DESC"
+    _RANK_DATE = {
+        "daily": "c.id = s.card_id AND s.card_type = 'character' AND s.stat_date = CURDATE()",
+        "weekly": "c.id = s.card_id AND s.card_type = 'character' AND s.stat_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)",
+        "monthly": "c.id = s.card_id AND s.card_type = 'character' AND s.stat_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)",
     }
-    order_clause = order_map.get(sort_type, "create_time DESC")
 
-    count_sql = f"SELECT COUNT(*) AS total FROM t_character_card WHERE {where_clause}"
+    if rank_type in _RANK_DATE:
+        join_clause = f"INNER JOIN t_cards_daily_stat s ON {_RANK_DATE[rank_type]}"
+        count_sql = (
+            f"SELECT COUNT(*) AS total FROM ("
+            f"SELECT c.id FROM t_character_card c {join_clause} "
+            f"WHERE {where_clause} GROUP BY c.id"
+            f") sub"
+        )
+        select_prefix = (
+            f"SELECT c.id, c.user_id, c.name, c.`desc`, c.avatar, c.author, "
+            f"c.language, c.category, c.tags, c.persona_content, c.is_public, "
+            f"c.like_count, c.view_count, c.collect_count, c.use_count, c.create_time, "
+            f"COALESCE(SUM(s.chat_count), 0) AS rank_score "
+            f"FROM t_character_card c {join_clause} "
+        )
+        data_sql = (
+            f"{select_prefix} WHERE {where_clause} GROUP BY c.id "
+            f"ORDER BY rank_score DESC, c.id DESC LIMIT %s OFFSET %s"
+        )
+    else:
+        count_sql = f"SELECT COUNT(*) AS total FROM t_character_card c WHERE {where_clause}"
+        order_map = {"new": "create_time DESC", "hot": "use_count DESC", "like": "like_count DESC"}
+        order_clause = order_map.get(sort_type, "create_time DESC")
+        select_prefix = f"SELECT {_CHAR_SELECT} FROM t_character_card c "
+        data_sql = (
+            f"{select_prefix} WHERE {where_clause} ORDER BY {order_clause} LIMIT %s OFFSET %s"
+        )
+
     total_row = query_one(count_sql, tuple(params))
     total = total_row["total"]
 
-    data_sql = (
-        f"SELECT {_CHAR_SELECT} FROM t_character_card "
-        f"WHERE {where_clause} ORDER BY {order_clause} LIMIT %s OFFSET %s"
-    )
     params.extend([page_size, (page_num - 1) * page_size])
     items = query_all(data_sql, tuple(params))
 
@@ -491,6 +515,7 @@ def character_chat_stream(character_id: int):
 
         if stream_tokens:
             _char_add_token_usage(character_id, stream_tokens)
+            _increment_daily_stat("character", character_id)
             try:
                 _chat_check_and_deduct(user_id, stream_tokens, conversation_id=conversation_id)
             except AppError:

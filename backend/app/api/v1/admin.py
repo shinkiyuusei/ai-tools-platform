@@ -261,7 +261,10 @@ def delete_work_admin(work_id: int):
     _check_admin(user_id)
 
     execute("DELETE FROM t_work_collect WHERE work_id = %s", (work_id,))
-    execute("DELETE FROM t_conversation WHERE work_id = %s", (work_id,))
+    execute(
+        "DELETE FROM t_conversation WHERE entity_id = %s AND entity_type = 'work'",
+        (work_id,),
+    )
     execute("DELETE FROM t_work_card WHERE id = %s", (work_id,))
     return success_response({"message": "删除成功"})
 

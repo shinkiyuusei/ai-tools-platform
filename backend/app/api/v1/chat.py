@@ -29,7 +29,7 @@ def _try_get_user_id():
 
 
 _WORK_SELECT = (
-    "id, name, `desc`, cover, author, summary, opening, openings, "
+    "id, user_id, name, `desc`, cover, author, summary, opening, openings, "
     "tags, role_config, use_count AS useCount, create_time AS createTime"
 )
 
@@ -214,14 +214,16 @@ def create_work():
 
     work_id = execute(
         "INSERT INTO t_work_card (user_id, name, `desc`, cover, author, summary, "
-        "opening, openings, tags, role_config, use_count, status) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        "opening, openings, tags, role_config, content, use_count, status) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (
             user_id, name, desc, payload.get("icon", "").strip(),
             payload.get("author", "").strip(), payload.get("detailedIntro", "").strip(),
             opening, json.dumps(openings, ensure_ascii=False),
             json.dumps(payload.get("tags", []), ensure_ascii=False),
-            json.dumps(role_config, ensure_ascii=False), 0, 1,
+            json.dumps(role_config, ensure_ascii=False),
+            json.dumps(payload.get("content", {}), ensure_ascii=False),
+            0, 1,
         ),
     )
     invalidate_work(0)  # invalidate lists and home
@@ -231,11 +233,15 @@ def create_work():
 @chat_bp.put("/chat/work/<int:work_id>")
 @jwt_required()
 def update_work(work_id: int):
+    user_id = int(get_jwt_identity())
+
     existing = query_one(
         f"SELECT {_WORK_SELECT} FROM t_work_card WHERE id = %s", (work_id,)
     )
     if not existing:
         raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "作品不存在")
+    if existing["user_id"] != user_id:
+        raise AppError(ErrorCode.FORBIDDEN, "只能编辑自己的作品")
 
     payload = request.get_json(silent=True) or {}
     updates = {}
@@ -410,6 +416,7 @@ def list_chat_works():
     page_size = min(int(request.args.get("pageSize", 12)), 50)
     keyword = request.args.get("keyword", "")
     sort_type = request.args.get("sortType", "hot")
+    rank_type = request.args.get("rankType", "total")
     category_id = request.args.get("categoryId", type=int)
 
     user_id = _try_get_user_id()
@@ -422,32 +429,55 @@ def list_chat_works():
         except AppError:
             pass
 
-    where = ["status IN (1, 2)"] if is_admin else ["status = 1"]
+    where = ["w.status IN (1, 2)"] if is_admin else ["w.status = 1"]
     params = []
 
     if keyword:
-        where.append("(name LIKE %s OR `desc` LIKE %s)")
+        where.append("(w.name LIKE %s OR w.`desc` LIKE %s)")
         params.extend([f"%{keyword}%", f"%{keyword}%"])
 
     if category_id:
-        where.append("category = %s")
+        where.append("w.category = %s")
         params.append(category_id)
 
     where_clause = " AND ".join(where)
 
-    order_map = {"hot": "use_count DESC, id DESC", "new": "create_time DESC, id DESC"}
-    order_clause = order_map.get(sort_type, "use_count DESC, id DESC")
+    _RANK_DATE = {
+        "daily": "w.id = s.card_id AND s.card_type = 'work' AND s.stat_date = CURDATE()",
+        "weekly": "w.id = s.card_id AND s.card_type = 'work' AND s.stat_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)",
+        "monthly": "w.id = s.card_id AND s.card_type = 'work' AND s.stat_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)",
+    }
 
-    count_sql = f"SELECT COUNT(*) AS total FROM t_work_card WHERE {where_clause}"
+    if rank_type in _RANK_DATE:
+        join_clause = f"INNER JOIN t_cards_daily_stat s ON {_RANK_DATE[rank_type]}"
+        count_sql = (
+            f"SELECT COUNT(*) AS total FROM ("
+            f"SELECT w.id FROM t_work_card w {join_clause} "
+            f"WHERE {where_clause} GROUP BY w.id"
+            f") sub"
+        )
+        data_sql = (
+            f"SELECT w.id, w.name, w.cover, w.`desc`, w.use_count AS useCount, "
+            f"w.create_time AS createTime, "
+            f"COALESCE(SUM(s.chat_count), 0) AS rank_score "
+            f"FROM t_work_card w {join_clause} "
+            f"WHERE {where_clause} GROUP BY w.id "
+            f"ORDER BY rank_score DESC, w.id DESC LIMIT %s OFFSET %s"
+        )
+    else:
+        count_sql = f"SELECT COUNT(*) AS total FROM t_work_card w WHERE {where_clause}"
+        order_map = {"hot": "use_count DESC, id DESC", "new": "create_time DESC, id DESC"}
+        order_clause = order_map.get(sort_type, "use_count DESC, id DESC")
+        data_sql = (
+            f"SELECT w.id, w.name, w.cover, w.`desc`, w.use_count AS useCount, "
+            f"w.create_time AS createTime "
+            f"FROM t_work_card w WHERE {where_clause} "
+            f"ORDER BY {order_clause} LIMIT %s OFFSET %s"
+        )
+
     total_row = query_one(count_sql, tuple(params))
     total = total_row["total"]
 
-    data_sql = (
-        f"SELECT id, name, cover, `desc`, use_count AS useCount, "
-        f"create_time AS createTime "
-        f"FROM t_work_card WHERE {where_clause} "
-        f"ORDER BY {order_clause} LIMIT %s OFFSET %s"
-    )
     params.extend([page_size, (page_num - 1) * page_size])
     items = query_all(data_sql, tuple(params))
 
@@ -533,3 +563,71 @@ def list_collected_works():
     } for row in rows]
 
     return page_response(items, total=total, page_num=page_num, page_size=page_size)
+
+
+# ---- User Work CRUD (non-admin) ----
+
+
+@chat_bp.get("/user/work/my")
+@jwt_required()
+def get_my_works():
+    """List the current user's own works."""
+    user_id = int(get_jwt_identity())
+    page_num = int(request.args.get("pageNum", 1))
+    page_size = min(int(request.args.get("pageSize", 12)), 50)
+
+    total_row = query_one(
+        "SELECT COUNT(*) AS total FROM t_work_card WHERE user_id = %s AND status = 1",
+        (user_id,),
+    )
+    total = total_row["total"]
+
+    rows = query_all(
+        "SELECT id, name, `desc`, cover, author, category, language, "
+        "use_count AS useCount, status, create_time AS createTime "
+        "FROM t_work_card "
+        "WHERE user_id = %s AND status = 1 "
+        "ORDER BY create_time DESC "
+        "LIMIT %s OFFSET %s",
+        (user_id, page_size, (page_num - 1) * page_size),
+    )
+
+    items = [{
+        "id": row["id"],
+        "name": row["name"],
+        "desc": row.get("desc", ""),
+        "cover": row.get("cover", ""),
+        "author": row.get("author", ""),
+        "category": row.get("category", 0),
+        "language": row.get("language", "zh-Hans"),
+        "useCount": row.get("useCount", 0),
+        "status": row.get("status", 1),
+        "createTime": str(row.get("createTime", "")),
+    } for row in rows]
+
+    return page_response(items, total=total, page_num=page_num, page_size=page_size)
+
+
+@chat_bp.delete("/chat/work/<int:work_id>")
+@jwt_required()
+def delete_my_work(work_id: int):
+    """Delete own work card with cascading cleanup."""
+    user_id = int(get_jwt_identity())
+
+    owner = query_one(
+        "SELECT user_id FROM t_work_card WHERE id = %s AND status = 1",
+        (work_id,),
+    )
+    if not owner:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "作品不存在或已删除")
+    if owner["user_id"] != user_id:
+        raise AppError(ErrorCode.FORBIDDEN, "只能删除自己的作品")
+
+    execute("DELETE FROM t_work_collect WHERE work_id = %s", (work_id,))
+    execute(
+        "DELETE FROM t_conversation WHERE entity_id = %s AND entity_type = 'work'",
+        (work_id,),
+    )
+    execute("DELETE FROM t_work_card WHERE id = %s", (work_id,))
+    invalidate_work(work_id)
+    return success_response({"message": "删除成功"})

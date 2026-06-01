@@ -4,7 +4,14 @@
     "error": "错误",
     "loading": "加载中...",
     "confirm": "确认",
-    "cancel": "取消"
+    "cancel": "取消",
+    "save": "保存",
+    "edit": "编辑",
+    "delete": "删除",
+    "back": "返回",
+    "start_chat": "开始对话",
+    "no_data": "暂无数据",
+    "select": "请选择"
   },
   "nav": {
     "home": "首页",
@@ -12,12 +19,15 @@
     "user_center": "个人中心",
     "login": "登录",
     "register": "注册",
-    "logout": "退出"
+    "logout": "退出",
+    "my_characters": "我的角色",
+    "my_works": "我的作品",
+    "favorites": "我的收藏"
   },
   "discovery": {
     "recommend_rank": "推荐榜",
     "category_section": "分区",
-    "chat_section": "约聊",
+
     "recent_publish": "最近发布",
     "daily_rank": "日榜",
     "weekly_rank": "周榜",
@@ -38,8 +48,7 @@
     "empty_content": "暂无故事内容",
     "empty_hint": "试试更换筛选条件或搜索关键词",
     "forum_hot": "论坛热帖",
-    "author_rank": "作者榜",
-    "custom_rank": "自定义",
+
     "premium": "高级"
   },
   "home": {
@@ -84,9 +93,15 @@
     "create_title": "创建角色卡",
     "edit_title": "编辑角色卡",
     "create_new": "新建角色卡",
+    "my_characters": "我的角色",
     "name": "角色名称",
     "name_placeholder": "请输入角色名称",
+    "desc": "角色描述",
+    "desc_placeholder": "简要描述这个角色",
     "avatar": "角色头像",
+    "author": "作者",
+    "author_placeholder": "你的昵称",
+    "language": "语言",
     "description": "角色描述",
     "description_placeholder": "简要描述这个角色",
     "personality": "性格特点",
@@ -94,9 +109,31 @@
     "background": "背景故事",
     "background_placeholder": "描述角色的背景故事",
     "tags": "标签",
-    "tags_placeholder": "用逗号分隔多个标签",
+    "tags_placeholder": "输入标签后按回车添加",
     "category": "分类",
     "is_public": "公开显示",
-    "delete_confirm": "确定要删除这个角色卡吗？"
+    "persona_content": "角色设定 (Markdown)",
+    "persona_content_placeholder": "用 Markdown 格式描述角色的性格、背景、说话风格、行为准则等...",
+    "persona_content_hint": "支持 Markdown 格式。建议包含：角色身份、外貌、性格、背景故事、说话风格、行为准则、特殊设定等。",
+    "delete_confirm": "确定要删除这个角色卡吗？",
+    "total_count": "共 {n} 个角色",
+    "empty_hint": "还没有创建任何角色，去创作页看看吧",
+    "go_create": "去创作",
+    "create_success": "角色卡创建成功",
+    "update_success": "角色卡更新成功",
+    "delete_success": "角色卡已删除"
+  },
+  "work": {
+    "my_works": "我的作品",
+    "create_new": "新建作品卡",
+    "delete_confirm": "确定要删除这个作品卡吗？相关对话记录也将被删除。",
+    "edit_title": "编辑作品卡",
+    "create_title": "创建作品卡",
+    "total_count": "共 {n} 个作品",
+    "empty_hint": "还没有创建任何作品，去创作页看看吧",
+    "go_create": "去创作",
+    "create_success": "作品卡创建成功",
+    "update_success": "作品卡更新成功",
+    "delete_success": "作品卡已删除"
   }
 }

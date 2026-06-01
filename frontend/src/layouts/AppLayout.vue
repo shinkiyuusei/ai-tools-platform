@@ -12,10 +12,12 @@ const route = useRoute()
 const isAdmin = computed(() => (auth.userInfo?.vipLevel || 0) >= 2)
 
 const menuList = [
-  { to: '/explore', label: '发现', desc: '发现故事', icon: '◇', color: 'misty' },
-  { to: '/create', label: '创作', desc: 'AI 写作', icon: '◇', color: 'crimson' },
-  { to: '/usercenter', label: '我的', desc: '个人中心', icon: '◇', color: 'green' },
-  { to: '/favorites', label: '我的收藏', desc: '收藏作品', icon: '♥', color: 'crimson' },
+  { to: '/explore',       label: '发现',     desc: '发现故事', icon: '◇', color: 'misty' },
+  { to: '/create',        label: '创作',     desc: 'AI 写作',  icon: '◇', color: 'crimson' },
+  { to: '/usercenter',    label: '我的',     desc: '个人中心', icon: '◇', color: 'green' },
+  { to: '/my-characters', label: '我的角色', desc: '管理角色卡', icon: '◇', color: 'candy' },
+  { to: '/my-works',      label: '我的作品', desc: '管理作品卡', icon: '◇', color: 'misty' },
+  { to: '/favorites',     label: '我的收藏', desc: '收藏作品', icon: '♥', color: 'crimson' },
 ]
 
 const adminMenuList = [
@@ -26,6 +28,7 @@ const adminMenuList = [
 ]
 
 const errorMessage = ref('')
+const successMessage = ref('')
 const sidebarCollapsed = ref(false)
 
 const isActive = (path) => {
@@ -37,6 +40,13 @@ const handleError = (event) => {
   window.setTimeout(() => {
     errorMessage.value = ''
   }, 3000)
+}
+
+const handleSuccess = (event) => {
+  successMessage.value = event.detail
+  window.setTimeout(() => {
+    successMessage.value = ''
+  }, 2000)
 }
 
 const handleLogout = () => {
@@ -51,11 +61,13 @@ const handleAuthExpired = () => {
 
 onMounted(() => {
   window.addEventListener('app:error', handleError)
+  window.addEventListener('app:success', handleSuccess)
   window.addEventListener('app:auth-expired', handleAuthExpired)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('app:error', handleError)
+  window.removeEventListener('app:success', handleSuccess)
   window.removeEventListener('app:auth-expired', handleAuthExpired)
 })
 </script>
@@ -168,7 +180,10 @@ onBeforeUnmount(() => {
     </div>
 
     <Transition name="toast">
-      <div v-if="errorMessage" class="toast">{{ errorMessage }}</div>
+      <div v-if="errorMessage" class="toast toast-error">{{ errorMessage }}</div>
+    </Transition>
+    <Transition name="toast">
+      <div v-if="successMessage" class="toast toast-success">{{ successMessage }}</div>
     </Transition>
   </div>
 </template>
@@ -679,6 +694,14 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border-primary);
   z-index: var(--z-toast);
   backdrop-filter: blur(12px);
+}
+
+.toast-error {
+  border-color: var(--color-crimson-soft);
+}
+
+.toast-success {
+  border-color: var(--color-dark-green-soft);
 }
 
 .toast-enter-active,

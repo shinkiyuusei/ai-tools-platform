@@ -1,12 +1,13 @@
 <script setup>
 import { ref, nextTick, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { characterApi } from '../api/character'
 import { conversationApi } from '../api/chat'
 import { useAuthStore } from '../stores/auth'
 import AppLayout from '../layouts/AppLayout.vue'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const characterId = Number(route.params.id)
 
@@ -20,6 +21,8 @@ const thinkingMode = ref(false)
 const activeStream = ref(null)
 const currentConversationId = ref(null)
 const conversationList = ref([])
+const liked = ref(false)
+const collected = ref(false)
 
 const models = [
   { key: 'deepseek-v4-flash', label: 'DeepSeek Flash' },
@@ -31,6 +34,7 @@ const ensureConversation = async () => {
   try {
     const res = await conversationApi.create(characterId, 'character', '')
     currentConversationId.value = res.data.id
+    loadConversationList()
   } catch (e) {
     console.error('Failed to create conversation:', e)
   }
@@ -60,6 +64,37 @@ const loadMessages = async () => {
   } catch (e) {
     console.error('Failed to load messages:', e)
   }
+}
+
+const loadConversationList = async () => {
+  try {
+    const res = await conversationApi.list(characterId, 'character')
+    conversationList.value = res.data.list || []
+  } catch (e) { /* ignore */ }
+}
+
+const switchConversation = async (convId) => {
+  if (convId === currentConversationId.value) return
+  currentConversationId.value = convId
+  messages.value = []
+  await loadMessages()
+}
+
+const deleteConversation = async (convId) => {
+  try {
+    await conversationApi.remove(convId)
+    if (currentConversationId.value === convId) {
+      currentConversationId.value = null
+      messages.value = []
+    }
+    loadConversationList()
+  } catch (e) { /* ignore */ }
+}
+
+const newConversation = () => {
+  currentConversationId.value = null
+  messages.value = []
+  loadConversationList()
 }
 
 const sendMessage = async () => {
@@ -131,12 +166,12 @@ const sendMessage = async () => {
       }
     }
 
-    // Save messages
     try {
       await conversationApi.saveMessages(currentConversationId.value, [
         { role: 'user', content: text },
         { role: 'assistant', content: messages.value[assistantIdx].content },
       ])
+      loadConversationList()
     } catch (e) { /* ignore */ }
   } catch (e) {
     if (e.name === 'AbortError') return
@@ -156,7 +191,32 @@ const stopStream = () => {
 }
 
 const scrollToBottom = () => {
-  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+  const el = document.querySelector('.messages-container')
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+const formatTime = (t) => {
+  if (!t) return ''
+  const d = new Date(t)
+  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+}
+
+const toggleLike = async () => {
+  try {
+    const res = await characterApi.like(characterId)
+    liked.value = res.data.liked
+  } catch (e) { /* ignore */ }
+}
+
+const toggleCollect = async () => {
+  try {
+    const res = await characterApi.collect(characterId)
+    collected.value = res.data.collected
+  } catch (e) { /* ignore */ }
+}
+
+const viewDetail = () => {
+  router.push(`/character/${characterId}`)
 }
 
 const formatContent = (content) => {
@@ -168,6 +228,7 @@ onMounted(async () => {
   try {
     await loadChatConfig()
     loading.value = false
+    loadConversationList()
     await ensureConversation()
     await loadMessages()
   } catch (e) {
@@ -179,123 +240,403 @@ onMounted(async () => {
 
 <template>
   <AppLayout>
-    <div class="character-chat" v-if="!loading">
-      <!-- Header -->
-      <div class="chat-header">
-        <div class="character-info">
-          <img v-if="character?.avatar" :src="character.avatar" class="char-avatar" />
-          <div v-else class="char-avatar-placeholder">{{ character?.name?.slice(0, 2) }}</div>
-          <div class="char-meta">
-            <h2>{{ character?.name || '角色' }}</h2>
-            <span class="char-author" v-if="character?.author">— {{ character.author }}</span>
+    <div class="chat-layout" v-if="!loading">
+      <!-- Main Chat Area -->
+      <div class="chat-main">
+        <!-- Header -->
+        <div class="chat-header">
+          <div class="header-left">
+            <img v-if="character?.avatar" :src="character.avatar" class="char-avatar" />
+            <div v-else class="char-avatar-placeholder">{{ character?.name?.slice(0, 2) }}</div>
+            <div class="char-meta">
+              <h2>{{ character?.name || '角色' }}</h2>
+              <span class="char-author" v-if="character?.author">— {{ character.author }}</span>
+            </div>
+          </div>
+          <div class="header-right">
+            <select v-model="selectedModel" class="model-select">
+              <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>
+            </select>
+            <label class="think-toggle">
+              <input type="checkbox" v-model="thinkingMode" />
+              Thinking
+            </label>
+            <button
+              class="btn-new-chat-header"
+              @click="newConversation"
+              :disabled="!messages.length"
+            >新对话</button>
           </div>
         </div>
-        <div class="chat-controls">
-          <select v-model="selectedModel" class="model-select">
-            <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>
-          </select>
-          <label class="think-toggle">
-            <input type="checkbox" v-model="thinkingMode" />
-            Thinking
-          </label>
+
+        <!-- Messages -->
+        <div class="messages-container">
+          <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
+            <div class="msg-avatar">
+              <template v-if="msg.role === 'user'">你</template>
+              <template v-else>{{ character?.name?.slice(0, 2) || 'AI' }}</template>
+            </div>
+            <div class="msg-content" v-html="formatContent(msg.content)"></div>
+          </div>
+
+          <div v-if="sending" class="message assistant">
+            <div class="msg-avatar">{{ character?.name?.slice(0, 2) || 'AI' }}</div>
+            <div class="msg-content typing">
+              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Input bar -->
+        <div class="input-bar">
+          <textarea
+            v-model="inputText"
+            :placeholder="'和 ' + (character?.name || '角色') + ' 聊天...'"
+            rows="2"
+            @keydown.enter.exact.prevent="sendMessage"
+            :disabled="sending"
+          ></textarea>
+          <button
+            v-if="!sending"
+            class="btn-send"
+            @click="sendMessage"
+            :disabled="!inputText.trim()"
+          >发送</button>
+          <button v-else class="btn-stop" @click="stopStream">停止</button>
         </div>
       </div>
 
-      <!-- Messages -->
-      <div class="messages-container">
-        <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
-          <div class="msg-avatar">
-            <template v-if="msg.role === 'user'">你</template>
-            <template v-else>{{ character?.name?.slice(0, 2) || 'AI' }}</template>
+      <!-- Sidebar -->
+      <aside class="chat-sidebar">
+        <!-- Character Info -->
+        <div class="sb-card sb-char-info">
+          <div class="sb-cover" @click="viewDetail">
+            <img v-if="character?.avatar" :src="character.avatar" :alt="character.name" />
+            <div v-else class="sb-cover-placeholder">{{ character?.name?.slice(0, 2) }}</div>
           </div>
-          <div class="msg-content" v-html="formatContent(msg.content)"></div>
+          <h2>{{ character?.name }}</h2>
+          <p class="sb-desc" v-if="character?.desc">{{ character.desc }}</p>
+          <p class="sb-author" v-if="character?.author">— {{ character.author }}</p>
+          <div class="sb-stats">
+            <span>♥ {{ character?.likeCount || 0 }}</span>
+            <span>★ {{ character?.collectCount || 0 }}</span>
+            <span>💬 {{ character?.useCount || 0 }}</span>
+          </div>
+          <div class="sb-actions">
+            <button class="sb-btn" @click="toggleLike">
+              {{ liked ? '♥' : '♡' }} 喜欢
+            </button>
+            <button class="sb-btn" @click="toggleCollect">
+              {{ collected ? '★' : '☆' }} 收藏
+            </button>
+            <button class="sb-btn" @click="viewDetail">查看详情</button>
+          </div>
         </div>
 
-        <div v-if="sending" class="message assistant">
-          <div class="msg-avatar">{{ character?.name?.slice(0, 2) || 'AI' }}</div>
-          <div class="msg-content typing">
-            <span class="dot"></span>
-            <span class="dot"></span>
-            <span class="dot"></span>
+        <!-- Conversation History -->
+        <div class="sb-card sb-history">
+          <button class="btn-new-chat" @click="newConversation">
+            <span class="plus">+</span> 新对话
+          </button>
+          <div class="conv-list">
+            <div
+              v-for="conv in conversationList"
+              :key="conv.id"
+              :class="['conv-item', { active: conv.id === currentConversationId }]"
+              @click="switchConversation(conv.id)"
+            >
+              <div class="conv-info">
+                <span class="conv-title">{{ conv.title || '未命名对话' }}</span>
+                <span class="conv-meta">{{ conv.messageCount || 0 }} 条 · {{ formatTime(conv.createTime) }}</span>
+              </div>
+              <button class="conv-del" @click.stop="deleteConversation(conv.id)">×</button>
+            </div>
+            <div v-if="!conversationList.length" class="conv-empty">暂无对话记录</div>
           </div>
         </div>
-      </div>
 
-      <!-- Input bar -->
-      <div class="input-bar">
-        <textarea
-          v-model="inputText"
-          :placeholder="'和 ' + (character?.name || '角色') + ' 聊天...'"
-          rows="2"
-          @keydown.enter.exact.prevent="sendMessage"
-          :disabled="sending"
-        ></textarea>
-        <button
-          v-if="!sending"
-          class="btn-send"
-          @click="sendMessage"
-          :disabled="!inputText.trim()"
-        >发送</button>
-        <button v-else class="btn-stop" @click="stopStream">停止</button>
-      </div>
+        <!-- Comments placeholder -->
+        <div class="sb-card sb-comments">
+          <h3>评论</h3>
+          <p class="sb-empty">暂无评论</p>
+        </div>
+      </aside>
     </div>
     <div v-else class="loading-state">加载中...</div>
   </AppLayout>
 </template>
 
 <style scoped>
-.character-chat {
+.chat-layout {
   display: flex;
-  flex-direction: column;
   height: calc(100vh - 64px);
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 0 var(--space-md);
 }
 
-.loading-state {
-  text-align: center;
-  padding: 80px 20px;
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ---- Sidebar ---- */
+.chat-sidebar {
+  width: 340px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-card);
+  overflow-y: auto;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  background: var(--bg-card);
+}
+
+.sb-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+}
+
+/* Character info card */
+.sb-cover {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  margin-bottom: var(--space-sm);
+}
+
+.sb-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sb-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
   color: var(--text-tertiary);
 }
 
+.sb-char-info h2 {
+  margin: 0 0 4px;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+}
+
+.sb-desc {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: 0 0 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sb-author {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin: 0 0 var(--space-sm);
+}
+
+.sb-stats {
+  display: flex;
+  gap: var(--space-md);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.sb-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.sb-btn {
+  padding: 4px 10px;
+  font-size: var(--text-xs);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sb-btn:hover {
+  border-color: var(--border-primary);
+  color: var(--text-primary);
+}
+
+/* Conversation history */
+.sb-history {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.btn-new-chat {
+  width: 100%;
+  padding: 8px;
+  border: 1px dashed var(--border-primary);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-misty-blue-deep);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: var(--space-sm);
+  transition: all var(--transition-fast);
+}
+
+.btn-new-chat:hover {
+  background: var(--color-misty-blue-ghost);
+}
+
+.plus {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.conv-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.conv-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  border-left: 3px solid transparent;
+}
+
+.conv-item:hover {
+  background: var(--bg-card);
+}
+
+.conv-item.active {
+  border-left-color: var(--color-misty-blue);
+  background: rgba(114, 148, 184, 0.08);
+}
+
+.conv-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conv-title {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-meta {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.conv-del {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+}
+
+.conv-item:hover .conv-del {
+  opacity: 1;
+}
+
+.conv-del:hover {
+  color: var(--color-crimson);
+}
+
+.conv-empty {
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  padding: var(--space-md);
+}
+
+/* Comments */
+.sb-comments {
+  flex-shrink: 0;
+}
+
+.sb-comments h3 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.sb-empty {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* ---- Header ---- */
 .chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border-card);
   flex-shrink: 0;
 }
 
-.character-info {
+.header-left {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
 }
 
 .char-avatar {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-full);
   object-fit: cover;
 }
 
 .char-avatar-placeholder {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-full);
   background: var(--bg-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 
 .char-meta h2 {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   color: var(--text-primary);
 }
 
@@ -304,7 +645,7 @@ onMounted(async () => {
   color: var(--text-tertiary);
 }
 
-.chat-controls {
+.header-right {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -328,10 +669,31 @@ onMounted(async () => {
   cursor: pointer;
 }
 
+.btn-new-chat-header {
+  padding: 4px 12px;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.btn-new-chat-header:hover:not(:disabled) {
+  border-color: var(--border-primary);
+  color: var(--text-primary);
+}
+
+.btn-new-chat-header:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---- Messages ---- */
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-lg) 0;
+  padding: var(--space-md);
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -340,7 +702,7 @@ onMounted(async () => {
 .message {
   display: flex;
   gap: var(--space-sm);
-  max-width: 85%;
+  max-width: 80%;
 }
 
 .message.user {
@@ -353,13 +715,13 @@ onMounted(async () => {
 }
 
 .msg-avatar {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-xs);
+  font-size: 11px;
   font-weight: 600;
   flex-shrink: 0;
   background: var(--bg-tertiary);
@@ -410,10 +772,11 @@ onMounted(async () => {
   30% { opacity: 1; }
 }
 
+/* ---- Input bar ---- */
 .input-bar {
   display: flex;
   gap: var(--space-sm);
-  padding: var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
   border-top: 1px solid var(--border-card);
   flex-shrink: 0;
 }
@@ -441,7 +804,6 @@ onMounted(async () => {
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
 }
 
 .btn-send {
@@ -449,17 +811,17 @@ onMounted(async () => {
   color: #fff;
 }
 
-.btn-send:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-send:hover:not(:disabled) {
-  background: var(--color-misty-blue);
-}
+.btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-send:hover:not(:disabled) { background: var(--color-misty-blue); }
 
 .btn-stop {
   background: var(--color-crimson-soft);
   color: #fff;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-tertiary);
 }
 </style>

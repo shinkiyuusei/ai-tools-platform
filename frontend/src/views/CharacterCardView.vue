@@ -1,46 +1,75 @@
 <template>
-  <div class="character-card-view">
-    <div class="header">
-      <h1>{{ t('character.my_characters') }}</h1>
-      <button class="btn-primary" @click="showCreateModal = true">
-        {{ t('character.create_new') }}
-      </button>
-    </div>
-
-    <div class="character-grid">
-      <div
-        v-for="char in characterList"
-        :key="char.id"
-        class="character-card"
-        @click="viewCharacter(char)"
-      >
-        <div class="card-image">
-          <img v-if="char.avatar" :src="char.avatar" :alt="char.name" />
-          <div v-else class="placeholder">{{ char.name.slice(0, 2) }}</div>
-          <div class="card-overlay">
-            <button class="btn-chat" @click.stop="openChat(char)">
-              {{ t('character.start_chat') }}
-            </button>
-            <button class="btn-edit" @click.stop="editCharacter(char)">
-              {{ t('common.edit') }}
-            </button>
-            <button class="btn-delete" @click.stop="deleteCharacter(char.id)">
-              {{ t('common.delete') }}
-            </button>
-          </div>
+  <AppLayout>
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <h1>{{ t('character.my_characters') }}</h1>
+          <span class="total-hint">{{ t('character.total_count', { n: totalCount }) }}</span>
         </div>
-        <div class="card-content">
-          <h3>{{ char.name }}</h3>
-          <p class="desc" v-if="char.desc">{{ char.desc }}</p>
-          <p class="author" v-if="char.author">— {{ char.author }}</p>
-          <div class="card-stats">
-            <span>♥ {{ char.likeCount || 0 }}</span>
-            <span>👁 {{ char.viewCount || 0 }}</span>
-            <span>★ {{ char.collectCount || 0 }}</span>
-            <span>💬 {{ char.useCount || 0 }}</span>
+        <button class="btn-primary" @click="openCreate">
+          {{ t('character.create_new') }}
+        </button>
+      </div>
+
+      <!-- Loading -->
+      <div v-if="loading" class="skeleton-grid">
+        <div v-for="n in 8" :key="n" class="skeleton-card" />
+      </div>
+
+      <!-- Empty -->
+      <div v-else-if="!characterList.length" class="empty-state">
+        <div class="empty-icon">◇</div>
+        <p>{{ t('character.empty_hint') }}</p>
+        <button class="btn-primary" @click="openCreate">
+          {{ t('character.go_create') }}
+        </button>
+      </div>
+
+      <!-- Data Grid -->
+      <div v-else class="character-grid">
+        <div
+          v-for="char in characterList"
+          :key="char.id"
+          class="character-card"
+          @click="viewCharacter(char)"
+        >
+          <div class="card-image">
+            <img v-if="char.avatar" :src="char.avatar" :alt="char.name" />
+            <div v-else class="placeholder">{{ char.name.slice(0, 2) }}</div>
+            <div class="card-overlay">
+              <button class="btn-chat" @click.stop="openChat(char)">
+                {{ t('common.start_chat') }}
+              </button>
+              <button class="btn-edit" @click.stop="editCharacter(char)">
+                {{ t('common.edit') }}
+              </button>
+              <button class="btn-delete" @click.stop="deleteCharacter(char.id)">
+                {{ t('common.delete') }}
+              </button>
+            </div>
+          </div>
+          <div class="card-content">
+            <h3>{{ char.name }}</h3>
+            <p class="desc" v-if="char.desc">{{ char.desc }}</p>
+            <p class="author" v-if="char.author">— {{ char.author }}</p>
+            <div class="card-stats">
+              <span>♥ {{ char.likeCount || 0 }}</span>
+              <span>👁 {{ char.viewCount || 0 }}</span>
+              <span>★ {{ char.collectCount || 0 }}</span>
+              <span>💬 {{ char.useCount || 0 }}</span>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Pagination -->
+      <BasePagination
+        v-if="totalCount > 0"
+        :current="pagination.pageNum"
+        :total="totalCount"
+        :page-size="pagination.pageSize"
+        @update:page-num="handlePageChange"
+      />
     </div>
 
     <!-- Create/Edit Modal -->
@@ -140,30 +169,38 @@
             <button type="button" class="btn-secondary" @click="closeModal">
               {{ t('common.cancel') }}
             </button>
-            <button type="submit" class="btn-primary">
-              {{ t('common.save') }}
+            <button type="submit" class="btn-primary" :disabled="saving">
+              {{ saving ? t('common.loading') : t('common.save') }}
             </button>
           </div>
         </form>
       </div>
     </div>
-  </div>
+  </AppLayout>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { characterApi } from '../api/character';
+import AppLayout from '../layouts/AppLayout.vue';
+import { notifySuccess, notifyError } from '../utils/notify';
+import BasePagination from '../components/base/BasePagination.vue';
 
 const { t } = useI18n();
 const router = useRouter();
 
 const characterList = ref([]);
+const totalCount = ref(0);
+const loading = ref(false);
+const saving = ref(false);
 const showCreateModal = ref(false);
 const editingCharacter = ref(null);
 const fileInput = ref(null);
 const tagInput = ref('');
+
+const pagination = ref({ pageNum: 1, pageSize: 12 });
 
 const categories = ref([
   { id: 1, name: '恋爱' },
@@ -187,15 +224,31 @@ const emptyForm = () => ({
 
 const formData = ref(emptyForm());
 
-const isEdit = computed(() => !!editingCharacter.value);
-
 const loadCharacters = async () => {
+  loading.value = true;
   try {
-    const res = await characterApi.getMyList({ pageNum: 1, pageSize: 50 });
+    const res = await characterApi.getMyList({
+      pageNum: pagination.value.pageNum,
+      pageSize: pagination.value.pageSize,
+    });
     characterList.value = res.data.list;
-  } catch (error) {
-    console.error('Failed to load characters:', error);
+    totalCount.value = res.data.total;
+  } catch (err) {
+    notifyError(err.message || t('common.error'));
+  } finally {
+    loading.value = false;
   }
+};
+
+const handlePageChange = (page) => {
+  pagination.value.pageNum = page;
+  loadCharacters();
+};
+
+const openCreate = () => {
+  editingCharacter.value = null;
+  formData.value = emptyForm();
+  showCreateModal.value = true;
 };
 
 const viewCharacter = (char) => {
@@ -226,9 +279,10 @@ const deleteCharacter = async (id) => {
 
   try {
     await characterApi.delete(id);
+    notifySuccess(t('character.delete_success'));
     loadCharacters();
-  } catch (error) {
-    console.error('Failed to delete character:', error);
+  } catch (err) {
+    notifyError(err.message || t('common.error'));
   }
 };
 
@@ -245,6 +299,7 @@ const removeTag = (index) => {
 };
 
 const saveCharacter = async () => {
+  saving.value = true;
   try {
     const data = {
       name: formData.value.name,
@@ -260,14 +315,18 @@ const saveCharacter = async () => {
 
     if (editingCharacter.value) {
       await characterApi.update(editingCharacter.value.id, data);
+      notifySuccess(t('character.update_success'));
     } else {
       await characterApi.create(data);
+      notifySuccess(t('character.create_success'));
     }
 
     closeModal();
     loadCharacters();
-  } catch (error) {
-    console.error('Failed to save character:', error);
+  } catch (err) {
+    notifyError(err.message || t('common.error'));
+  } finally {
+    saving.value = false;
   }
 };
 
@@ -289,11 +348,12 @@ const handleFileUpload = async (event) => {
   try {
     const res = await characterApi.uploadAvatar(file);
     formData.value.avatar = res.data.url;
-  } catch (error) {
-    console.error('Failed to upload avatar:', error);
-    alert(t('common.error'));
+  } catch (err) {
+    notifyError(err.message || t('common.error'));
   }
 };
+
+
 
 onMounted(() => {
   loadCharacters();
@@ -301,22 +361,27 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.character-card-view {
+.page {
   padding: var(--space-lg);
   max-width: var(--max-content-width);
   margin: 0 auto;
 }
 
-.header {
+.page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: var(--space-xl);
 }
 
-.header h1 {
+.page-header h1 {
   font-size: var(--text-xl);
-  margin: 0;
+  margin: 0 0 4px 0;
+}
+
+.total-hint {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 .character-grid {
@@ -418,6 +483,47 @@ onMounted(() => {
   color: var(--text-tertiary);
 }
 
+/* Skeleton grid */
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-lg);
+}
+
+.skeleton-card {
+  aspect-ratio: 1/1;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  color: var(--text-tertiary);
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: var(--space-lg);
+  opacity: .5;
+}
+
+.empty-state p {
+  font-size: var(--text-base);
+  margin: 0 0 var(--space-lg) 0;
+}
+
+/* Modal */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -622,6 +728,11 @@ onMounted(() => {
 
 .btn-primary:hover {
   background: var(--color-misty-blue);
+}
+
+.btn-primary:disabled {
+  opacity: .6;
+  cursor: not-allowed;
 }
 
 .btn-secondary {

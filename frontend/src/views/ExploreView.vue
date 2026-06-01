@@ -31,7 +31,6 @@ const categoryTabs = [
   { key: 'premium', label: 'discovery.premium' },
   { key: 'recommend', label: 'discovery.recommend_rank' },
   { key: 'category', label: 'discovery.category_section' },
-  { key: 'chat', label: 'discovery.chat_section' },
   { key: 'recent', label: 'discovery.recent_publish' },
 ]
 const activeCategoryTab = ref('recommend')
@@ -41,18 +40,15 @@ const rankingTabs = [
   { key: 'weekly', label: 'discovery.weekly_rank' },
   { key: 'monthly', label: 'discovery.monthly_rank' },
   { key: 'total', label: 'discovery.total_rank' },
-  { key: 'author', label: 'discovery.author_rank' },
-  { key: 'custom', label: 'discovery.custom_rank' },
 ]
-const activeRankingTab = ref('daily')
+const activeRankingTab = ref('total')
+const rankType = ref('total')
 
 const channelTabs = [
   { key: 'works', label: 'discovery.content_works' },
   { key: 'cards', label: 'discovery.content_character_cards' }
 ]
 const activeChannelTab = ref('works')
-
-const announceText = ref('2026 春 · 新故事已上线')
 
 const categories = [
   { id: 1, name: 'categories.love', color: 'crimson' },
@@ -71,6 +67,7 @@ const fetchList = async () => {
     const params = {
       keyword: keyword.value,
       sortType: sortType.value,
+      rankType: rankType.value,
       pageNum: pageNum.value,
       pageSize: pageSize.value,
     }
@@ -175,8 +172,6 @@ onMounted(fetchList)
 <template>
   <AppLayout>
     <section class="explore-page animate-fade-in">
-      <div class="announce-line">{{ announceText }}</div>
-
       <div class="top-nav">
         <span
           v-for="tab in categoryTabs"
@@ -189,7 +184,7 @@ onMounted(fetchList)
           v-for="tab in rankingTabs"
           :key="tab.key"
           :class="['top-nav-item top-nav-item--rank', { active: activeRankingTab === tab.key }]"
-          @click="activeRankingTab = tab.key"
+          @click="activeRankingTab = tab.key; rankType = tab.key; fetchList()"
         >{{ getTabLabel(tab.label) }}</span>
       </div>
 
@@ -221,7 +216,7 @@ onMounted(fetchList)
         <router-link
           v-for="item in listData.list"
           :key="item.id"
-          :to="item._type === 'character' ? `/character/${item.id}` : `/chat/${item.id}`"
+          :to="item._type === 'character' ? `/chat/character/${item.id}` : `/chat/${item.id}`"
           class="tool-card"
           :class="[
             `card--${getCategoryColor(item.categoryId)}`,
@@ -287,15 +282,6 @@ onMounted(fetchList)
 <style scoped>
 .explore-page {
   background: transparent;
-}
-
-/* --- Announce --- */
-.announce-line {
-  text-align: center;
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  margin-bottom: var(--space-sm);
-  letter-spacing: 0.02em;
 }
 
 /* --- Top Nav --- */

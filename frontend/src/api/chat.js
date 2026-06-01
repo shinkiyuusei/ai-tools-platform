@@ -49,6 +49,12 @@ export const chatApi = {
   updateWorkConfig(workId, config) {
     return http.put(`/chat/work/${workId}/config`, config)
   },
+  getMyWorks(params) {
+    return http.get('/user/work/my', { params })
+  },
+  deleteWork(workId) {
+    return http.delete(`/chat/work/${workId}`)
+  },
   sendMessageStream({ messages, systemPrompt, model, thinkingMode = false, reasoningEffort = 'medium', sceneContext, conversationId }) {
     const controller = new AbortController()
     let cancelled = false
