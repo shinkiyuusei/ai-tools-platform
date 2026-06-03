@@ -9,7 +9,7 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   error: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'enter'])
 const id = useId()
 
 const onInput = (event) => {
@@ -29,6 +29,7 @@ const onInput = (event) => {
       class="base-input"
       :class="{ 'base-input--error': error }"
       @input="onInput"
+      @keyup.enter="$emit('enter')"
     />
     <span v-if="error" class="base-input-error">{{ error }}</span>
   </div>

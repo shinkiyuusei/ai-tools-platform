@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { chatApi } from '../api/chat'
 import { characterApi } from '../api/character'
+import { discoveryApi } from '../api/discovery'
 import BaseInput from '../components/base/BaseInput.vue'
 import BasePagination from '../components/base/BasePagination.vue'
 import BaseTooltip from '../components/base/BaseTooltip.vue'
@@ -26,15 +27,15 @@ const categoryId = ref(null)
 const pageNum = ref(1)
 const pageSize = ref(12)
 
-
+// ---- Category tabs ------------------------------------------------
 const categoryTabs = [
-  { key: 'premium', label: 'discovery.premium' },
   { key: 'recommend', label: 'discovery.recommend_rank' },
   { key: 'category', label: 'discovery.category_section' },
   { key: 'recent', label: 'discovery.recent_publish' },
 ]
 const activeCategoryTab = ref('recommend')
 
+// ---- Rankings -----------------------------------------------------
 const rankingTabs = [
   { key: 'daily', label: 'discovery.daily_rank' },
   { key: 'weekly', label: 'discovery.weekly_rank' },
@@ -44,20 +45,45 @@ const rankingTabs = [
 const activeRankingTab = ref('total')
 const rankType = ref('total')
 
+// ---- Channels -----------------------------------------------------
 const channelTabs = [
   { key: 'works', label: 'discovery.content_works' },
   { key: 'cards', label: 'discovery.content_character_cards' }
 ]
 const activeChannelTab = ref('works')
 
-const categories = [
-  { id: 1, name: 'categories.love', color: 'crimson' },
-  { id: 2, name: 'categories.character', color: 'candy' },
-  { id: 3, name: 'categories.plot', color: 'misty' },
-  { id: 4, name: 'categories.fantasy', color: 'green' },
-  { id: 5, name: 'categories.daily', color: 'silver' },
-]
+// ---- Dynamic categories from API -----------------------------------
+const categories = ref([])
+const categoryLoading = ref(false)
 
+const loadCategories = async () => {
+  categoryLoading.value = true
+  try {
+    const res = await discoveryApi.getCategories()
+    categories.value = (res.data || []).map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      color: cat.color,
+      icon: cat.icon,
+      count: cat.count || 0,
+    }))
+  } catch { /* ignore */ }
+  finally { categoryLoading.value = false }
+}
+
+const selectCategory = (cat) => {
+  categoryId.value = cat.id
+  pageNum.value = 1
+  fetchList()
+}
+
+const clearCategory = () => {
+  categoryId.value = null
+  pageNum.value = 1
+  fetchList()
+}
+
+// ---- Data list ----------------------------------------------------
 const listData = ref({ list: [], total: 0, pageNum: 1, pageSize: 12 })
 const loading = ref(false)
 
@@ -79,6 +105,7 @@ const fetchList = async () => {
       const charParams = {
         keyword: params.keyword,
         sortType: sortMap[params.sortType] || 'hot',
+        rankType: params.rankType,
         pageNum: params.pageNum,
         pageSize: params.pageSize,
       }
@@ -131,42 +158,144 @@ const fetchList = async () => {
   }
 }
 
+// ---- Recommend tab -------------------------------------------------
+const fetchRecommend = async () => {
+  loading.value = true
+  try {
+    const params = {
+      type: activeChannelTab.value === 'cards' ? 'character' : 'work',
+      pageNum: pageNum.value,
+      pageSize: pageSize.value,
+    }
+    if (categoryId.value) params.categoryId = categoryId.value
+
+    const res = await discoveryApi.getRecommend(params)
+    const mappedList = (res.data.list || []).map(item => {
+      if (item._type === 'character') {
+        const tags = Array.isArray(item.tags) ? item.tags : []
+        const tagList = tags.map((name, i) => ({
+          id: Math.abs(hashCode(String(name))) % 900 + 100 + i,
+          name: String(name).trim()
+        }))
+        const views = Number(item.viewCount || 0)
+        const likes = Number(item.likeCount || 0)
+        let honorTier = null
+        if (views >= 1000000 || likes >= 50000) honorTier = 'gold'
+        else if (views >= 100000 || likes >= 10000) honorTier = 'silver'
+        else if (views >= 10000) honorTier = 'bronze'
+        return {
+          id: item.id,
+          name: item.name,
+          icon: item.icon || '',
+          desc: item.desc || '',
+          useCount: Number(item.useCount || 0),
+          likeCount: likes,
+          collectCount: Number(item.collectCount || 0),
+          favoritesCount: item.collectCount || 0,
+          isFree: true,
+          isVip: false,
+          createTime: item.createTime,
+          categoryId: item.categoryId,
+          tags: tagList,
+          honorTier,
+          _type: 'character',
+        }
+      }
+      return { ...item, _type: 'work' }
+    })
+    listData.value.list = mappedList
+    listData.value.total = res.data.total
+    listData.value.pageNum = res.data.pageNum
+    listData.value.pageSize = res.data.pageSize
+  } finally {
+    loading.value = false
+  }
+}
+
+// ---- Actions --------------------------------------------------------
 const changeSort = (val) => {
   sortType.value = val
   pageNum.value = 1
+  activeCategoryTab.value = null  // exit recommend/category mode, use default ranking
   fetchList()
 }
 
 const handleSearch = () => {
+  // Exit recommend / category tab mode so pagination & sorting respect the keyword
+  if (activeCategoryTab.value === 'recommend' || activeCategoryTab.value === 'category') {
+    activeCategoryTab.value = null
+  }
   pageNum.value = 1
   fetchList()
 }
 
 const handlePageChange = (page) => {
   pageNum.value = page
+  if (activeCategoryTab.value === 'recommend') {
+    fetchRecommend()
+  } else {
+    fetchList()
+  }
+}
+
+// ---- Category tab click --------------------------------------------
+const onCategoryTabClick = (tab) => {
+  activeCategoryTab.value = tab.key
+  pageNum.value = 1
+  categoryId.value = null
+
+  if (tab.key === 'recommend') {
+    fetchRecommend()
+  } else if (tab.key === 'category') {
+    if (categories.value.length === 0) loadCategories()
+  } else if (tab.key === 'recent') {
+    sortType.value = 'new'
+    fetchList()
+  }
+}
+
+// ---- Ranking tab click ---------------------------------------------
+const onRankingTabClick = (tab) => {
+  activeRankingTab.value = tab.key
+  rankType.value = tab.key
+  activeCategoryTab.value = null  // exit recommend/category mode
+  pageNum.value = 1
   fetchList()
 }
 
-
+// ---- Helpers --------------------------------------------------------
 const getCategoryColor = (catId) => {
-  const cat = categories.find(c => c.id === catId)
+  const cat = categories.value.find(c => c.id === catId)
   return cat ? cat.color : 'misty'
+}
+
+const getCategoryName = (catId) => {
+  const cat = categories.value.find(c => c.id === catId)
+  return cat ? cat.name : ''
 }
 
 const getTabLabel = (labelKey) => {
   return t(labelKey)
 }
 
+// ---- Watchers -------------------------------------------------------
 watch(pageNum, () => {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 })
 
 watch(activeChannelTab, () => {
   pageNum.value = 1
-  fetchList()
+  if (activeCategoryTab.value === 'recommend') {
+    fetchRecommend()
+  } else {
+    fetchList()
+  }
 })
 
-onMounted(fetchList)
+onMounted(() => {
+  fetchRecommend()
+  loadCategories()
+})
 </script>
 
 <template>
@@ -177,22 +306,46 @@ onMounted(fetchList)
           v-for="tab in categoryTabs"
           :key="tab.key"
           :class="['top-nav-item', { active: activeCategoryTab === tab.key }]"
-          @click="activeCategoryTab = tab.key"
+          @click="onCategoryTabClick(tab)"
         >{{ getTabLabel(tab.label) }}</span>
         <span class="top-nav-divider"></span>
         <span
           v-for="tab in rankingTabs"
           :key="tab.key"
           :class="['top-nav-item top-nav-item--rank', { active: activeRankingTab === tab.key }]"
-          @click="activeRankingTab = tab.key; rankType = tab.key; fetchList()"
+          @click="onRankingTabClick(tab)"
         >{{ getTabLabel(tab.label) }}</span>
       </div>
 
       <div class="toolbar-row">
-        <BaseInput v-model="keyword" :placeholder="t('discovery.search_placeholder')" @keyup.enter="handleSearch" />
+        <BaseInput v-model="keyword" :placeholder="t('discovery.search_placeholder')" @enter="handleSearch" />
         <button class="action-btn" @click="handleSearch">{{ t('common.confirm') }}</button>
-        <button class="action-btn ghost" type="button">{{ t('discovery.advanced_search') }}</button>
         <button class="action-btn ghost" type="button">{{ t('discovery.random') }}</button>
+      </div>
+
+      <!-- Category grid (shown when "分区" tab is active and no category selected) -->
+      <div v-if="activeCategoryTab === 'category' && !categoryId" class="category-section">
+        <div v-if="categoryLoading" class="skeleton-grid">
+          <div v-for="n in 5" :key="n" class="skeleton-card"></div>
+        </div>
+        <div v-else class="category-grid">
+          <button
+            v-for="cat in categories"
+            :key="cat.id"
+            :class="['category-card', `category-card--${cat.color}`]"
+            @click="selectCategory(cat)"
+          >
+            <span class="category-name">{{ cat.name }}</span>
+            <span class="category-count">{{ cat.count }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Category breadcrumb (shown when a category is selected from category tab) -->
+      <div v-if="activeCategoryTab === 'category' && categoryId" class="category-breadcrumb">
+        <span class="breadcrumb-link" @click="clearCategory">{{ t('discovery.category_section') }}</span>
+        <span class="breadcrumb-sep">&rsaquo;</span>
+        <span class="breadcrumb-current">{{ getCategoryName(categoryId) }}</span>
       </div>
 
       <div class="channel-tabs">
@@ -706,6 +859,79 @@ onMounted(fetchList)
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   letter-spacing: 0.02em;
+}
+
+/* --- Category Grid --- */
+.category-section {
+  margin-bottom: var(--space-md);
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-sm);
+}
+
+.category-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-lg) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.category-card:hover {
+  transform: translateY(-2px);
+}
+
+.category-card--crimson:hover { border-color: var(--color-crimson); box-shadow: var(--shadow-glow-crimson); }
+.category-card--candy:hover { border-color: var(--color-candy-pink); box-shadow: var(--shadow-glow-pink); }
+.category-card--misty:hover { border-color: var(--color-misty-blue); box-shadow: var(--shadow-glow-misty); }
+.category-card--green:hover { border-color: var(--color-dark-green); }
+.category-card--silver:hover { border-color: var(--color-silver-gray); }
+
+.category-name {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.category-count {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.category-breadcrumb {
+  margin-bottom: var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.breadcrumb-link {
+  color: var(--color-misty-blue-soft);
+  cursor: pointer;
+}
+
+.breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  color: var(--text-tertiary);
+}
+
+.breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 /* --- Responsive --- */

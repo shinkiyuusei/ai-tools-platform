@@ -33,12 +33,6 @@ class ContentAuditor:
 
         return {"passed": True, "message": "ok"}
 
-    def sanitize(self, text: str, replacement: str = "***") -> str:
-        if not text:
-            return text
-        return self._pattern.sub(replacement, text)
-
-
 _auditor = ContentAuditor()
 
 
@@ -46,5 +40,4 @@ def audit_content(text: str) -> dict:
     return _auditor.check(text)
 
 
-def sanitize_content(text: str) -> str:
-    return _auditor.sanitize(text)
+

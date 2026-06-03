@@ -50,6 +50,13 @@ def create_app() -> Flask:
     register_error_handlers(app)
     register_response_hooks(app)
     
+    # Start recommendation scheduler (daemon thread, won't block)
+    try:
+        from .services.scheduler import start_scheduler
+        start_scheduler(app)
+    except Exception:
+        logger.warning("Scheduler failed to start (non-fatal):", exc_info=True)
+
     # Register security headers middleware
     app.after_request(add_security_headers)
 
