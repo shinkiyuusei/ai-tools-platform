@@ -21,10 +21,10 @@ def add_security_headers(response):
     csp = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-        "style-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.loli.net; "
         "img-src 'self' data: https:; "
-        "font-src 'self' data:; "
-        "connect-src 'self'; "
+        "font-src 'self' data: https://fonts.loli.net https://gstatic.loli.net; "
+        "connect-src 'self' https://fonts.loli.net https://gstatic.loli.net; "
         "frame-ancestors 'none';"
     )
     response.headers['Content-Security-Policy'] = csp

@@ -31,16 +31,15 @@ def _refresh_job():
 def _credit_grant_job():
     """轮询 t_recharge_order 中已支付但积分未发放的订单，逐条发放积分"""
     try:
-        from ..utils.mysql import execute
+        from ..utils.mysql import execute, query_all
         from .credit import grant
 
         # 批量查询待发放订单（每次最多处理 20 条）
-        rows = execute(
+        rows = query_all(
             "SELECT id, user_id, total_credits, order_no "
             "FROM t_recharge_order "
             "WHERE status = 1 AND credits_granted = 0 "
             "ORDER BY pay_time ASC LIMIT 20",
-            fetch=True,
         )
 
         if not rows:

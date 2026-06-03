@@ -17,7 +17,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
-    "@rolldown/binding-win32-x64-msvc": "^1.0.0-rc.17",
     "@vitejs/plugin-vue": "^6.0.6",
     "vite": "^8.0.10"
   }

@@ -37,7 +37,7 @@ def get_trending():
         char_params.append(category_id)
 
     characters = query_all(
-        f"SELECT c.id, c.name, c.avatar, c.description, c.like_count AS likeCount, "
+        f"SELECT c.id, c.name, c.avatar, c.`desc`, c.like_count AS likeCount, "
         f"c.view_count AS viewCount, c.collect_count AS collectCount, 'character' AS type "
         f"FROM t_character_card c "
         f"WHERE {char_where} ORDER BY like_count DESC LIMIT %s",
@@ -120,7 +120,7 @@ def get_featured():
     )
 
     characters = query_all(
-        f"SELECT c.id, c.name, c.avatar, c.description, c.like_count AS likeCount, "
+        f"SELECT c.id, c.name, c.avatar, c.`desc`, c.like_count AS likeCount, "
         f"c.view_count AS viewCount, c.collect_count AS collectCount, 'character' AS type "
         f"FROM t_character_card c "
         f"WHERE c.status = 1 AND c.is_public = 1 ORDER BY like_count DESC LIMIT %s",
