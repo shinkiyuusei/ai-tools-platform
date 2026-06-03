@@ -3,11 +3,14 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
+import RechargeModal from '../components/RechargeModal.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+
+const showRechargeModal = ref(false)
 
 const isAdmin = computed(() => (auth.userInfo?.vipLevel || 0) >= 2)
 
@@ -92,7 +95,7 @@ onBeforeUnmount(() => {
 
         <div class="top-nav-user">
           <template v-if="auth.isLoggedIn()">
-            <span class="user-points">积分:{{ auth.userInfo?.credits ?? 0 }}</span>
+            <span class="user-points" @click="showRechargeModal = true" title="点击充值积分">积分:{{ auth.userInfo?.credits ?? 0 }}</span>
             <div class="user-avatar-mini">{{ auth.userInfo?.nickname?.charAt(0) || 'U' }}</div>
             <RouterLink to="/usercenter" class="user-name-link">{{ auth.userInfo?.nickname || '用户' }}</RouterLink>
             <button class="nav-logout-btn" @click="handleLogout">{{ t('nav.logout') }}</button>
@@ -185,6 +188,9 @@ onBeforeUnmount(() => {
     <Transition name="toast">
       <div v-if="successMessage" class="toast toast-success">{{ successMessage }}</div>
     </Transition>
+
+    <!-- 充值弹窗 -->
+    <RechargeModal v-if="showRechargeModal" @close="showRechargeModal = false" />
   </div>
 </template>
 
@@ -279,6 +285,12 @@ onBeforeUnmount(() => {
   background: rgba(238, 162, 180, 0.1);
   padding: 4px 10px;
   border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.user-points:hover {
+  background: rgba(238, 162, 180, 0.2);
+  color: var(--color-candy-pink);
 }
 
 .user-avatar-mini {

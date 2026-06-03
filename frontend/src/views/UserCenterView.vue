@@ -5,6 +5,7 @@ import { getUserInfo, updateUserInfo } from '../api/user'
 import { useAuthStore } from '../stores/auth'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
+import RechargeModal from '../components/RechargeModal.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 
 const router = useRouter()
@@ -14,8 +15,10 @@ const activeMenu = ref('account')
 const user = ref({ nickname: '', avatar: '', vipLevel: 0, vipExpireTime: null, phone: '', email: '' })
 const editForm = ref({ nickname: '', avatar: '' })
 const saveLoading = ref(false)
+const showRechargeModal = ref(false)
 
 const menuItems = [
+  { key: 'recharge', label: '积分充值', icon: '💰', action: 'recharge' },
   { key: 'characters', label: '我的角色', icon: '◇', route: '/my-characters' },
   { key: 'works', label: '我的作品', icon: '◇', route: '/my-works' },
   { key: 'favorites', label: '我的收藏', icon: '♥', route: '/favorites' },
@@ -49,6 +52,10 @@ const handleSaveInfo = async () => {
 
 const switchMenu = (key) => {
   const item = menuItems.find(m => m.key === key)
+  if (item?.action === 'recharge') {
+    showRechargeModal.value = true
+    return
+  }
   if (item?.route) {
     router.push(item.route)
     return
@@ -141,6 +148,9 @@ onMounted(async () => {
         </div>
       </div>
     </section>
+
+    <!-- 充值弹窗 -->
+    <RechargeModal v-if="showRechargeModal" @close="showRechargeModal = false" />
   </AppLayout>
 </template>
 

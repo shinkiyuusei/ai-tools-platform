@@ -46,6 +46,18 @@ class BaseConfig:
             "chat_model": os.getenv("DEEPSEEK_CHAT_MODEL", "deepseek-v4-flash"),
             "reasoner_model": os.getenv("DEEPSEEK_REASONER_MODEL", "deepseek-v4-pro"),
         }
+        self.ALIPAY_CONFIG = {
+            "app_id": os.getenv("ALIPAY_APP_ID", ""),
+            "app_private_key": os.getenv("ALIPAY_APP_PRIVATE_KEY", "").replace("\\n", "\n"),
+            "alipay_public_key": os.getenv("ALIPAY_PUBLIC_KEY", "").replace("\\n", "\n"),
+            "gateway": os.getenv(
+                "ALIPAY_GATEWAY",
+                "https://openapi-sandbox.dl.alipaydev.com/gateway.do",
+            ),
+            "notify_url": os.getenv("ALIPAY_NOTIFY_URL", ""),
+            "return_url": os.getenv("ALIPAY_RETURN_URL", ""),
+            "sign_type": "RSA2",
+        }
         self.SUPPORTED_LANGUAGES = ['zh', 'en', 'ja', 'ko']
 
 

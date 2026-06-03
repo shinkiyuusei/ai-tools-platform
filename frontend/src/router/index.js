@@ -12,6 +12,7 @@ import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import UserCenterView from '../views/UserCenterView.vue'
 import CharacterCardView from '../views/CharacterCardView.vue'
+import RechargeResultView from '../views/RechargeResultView.vue'
 import WorkCardView from '../views/WorkCardView.vue'
 import CharacterManageView from '../views/admin/CharacterManageView.vue'
 import TagManageView from '../views/admin/TagManageView.vue'
@@ -31,6 +32,7 @@ const routes = [
   { path: '/favorites', name: 'favorites', component: FavoritesView, meta: { requiresAuth: true } },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/register', name: 'register', component: RegisterView },
+  { path: '/recharge/result', name: 'recharge-result', component: RechargeResultView, meta: { requiresAuth: true } },
   { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordView },
   { path: '/error/:code', name: 'error', component: ErrorView, props: true },
   { path: '/admin/tag', name: 'admin-tag', component: TagManageView, meta: { requiresAuth: true } },
