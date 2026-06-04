@@ -14,6 +14,7 @@ from ...services.cache import (
     cache_get, cache_set, LIST_TTL,
 )
 from ...services.chat.prompt_builder import build_enhanced_system_prompt
+from ...utils.writing_style import normalize_writing_style
 
 chat_bp = Blueprint("chat", __name__)
 
@@ -52,6 +53,10 @@ def _build_work_data(work, perspective=None):
     role_config = _parse_json(work.get("role_config"), {})
     openings = _parse_json(work.get("openings"), [])
 
+    # Default NSFW writing style — any work card is NSFW unless explicitly set otherwise
+    stored_writing_style = role_config.get("writing_style") or role_config.get("writingStyle") or {}
+    writing_style = normalize_writing_style(stored_writing_style)
+
     legacy = {
         "author": work.get("author", ""),
         "detailedIntro": work.get("summary", ""),
@@ -73,6 +78,7 @@ def _build_work_data(work, perspective=None):
         },
         "gameRules": role_config.get("play_rule", ""),
         "statusBar": role_config.get("status_bar", ""),
+        "writingStyle": writing_style,
     }
 
     full_prompt = build_enhanced_system_prompt(work_name, legacy, perspective)
@@ -122,6 +128,7 @@ def _build_work_data(work, perspective=None):
         },
         "gameRules": role_config.get("play_rule", ""),
         "statusBar": role_config.get("status_bar", ""),
+        "writingStyle": writing_style,
     }
 
 
@@ -160,7 +167,8 @@ def _convert_protagonist(p):
 
 
 def _make_role_config(payload):
-    return {
+    ws = payload.get("writingStyle") or {}
+    rc = {
         "main_plot": payload.get("mainPlot", "").strip(),
         "play_rule": payload.get("gameRules", "").strip(),
         "status_bar": payload.get("statusBar", "").strip(),
@@ -169,6 +177,10 @@ def _make_role_config(payload):
         "worldview_setting": _convert_world(payload.get("worldSetting", {})),
         "protagonist_setting": _convert_protagonist(payload.get("protagonist", {})),
     }
+    # Only store writing_style if explicitly provided
+    if ws.get("contentMode"):
+        rc["writing_style"] = normalize_writing_style(ws)
+    return rc
 
 
 @chat_bp.post("/chat/work/upload-cover")
@@ -280,6 +292,10 @@ def update_work(work_id: int):
         role_changed = True
     if "opening" in payload:
         role_config["init_plot_status"] = payload["opening"]
+        role_changed = True
+    if "writingStyle" in payload:
+        ws = payload.get("writingStyle") or {}
+        role_config["writing_style"] = normalize_writing_style(ws)
         role_changed = True
     if role_changed:
         updates["role_config"] = "%s"
@@ -394,6 +410,11 @@ def update_work_config(work_id: int):
         updates["opening"] = "%s"
         values.append(payload["opening"])
         role_config["init_plot_status"] = payload["opening"]
+        role_changed = True
+
+    if "writingStyle" in payload:
+        ws = payload.get("writingStyle") or {}
+        role_config["writing_style"] = normalize_writing_style(ws)
         role_changed = True
 
     if role_changed:

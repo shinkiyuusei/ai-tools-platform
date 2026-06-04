@@ -58,27 +58,36 @@ def _user_info_row(user: dict) -> dict:
 @user_bp.post("/user/register")
 def register():
     payload = request.get_json(silent=True) or {}
+    email = (payload.get("email", "") or "").strip()
     phone = (payload.get("phone", "") or "").strip()
     password = payload.get("password", "")
 
-    if not phone:
-        raise AppError(ErrorCode.PARAM_INVALID, "手机号不能为空")
+    if not email and not phone:
+        raise AppError(ErrorCode.PARAM_INVALID, "邮箱或手机号不能为空")
     if not password or len(password) < 6:
         raise AppError(ErrorCode.PARAM_INVALID, "密码长度不能少于6位")
 
-    existing = query_one(
-        "SELECT id FROM t_user WHERE phone = %s AND phone != '' AND is_delete = 0",
-        (phone,),
-    )
-    if existing:
-        raise AppError(ErrorCode.PARAM_INVALID, "该手机号已注册")
+    if email:
+        existing = query_one(
+            "SELECT id FROM t_user WHERE email = %s AND email != '' AND is_delete = 0",
+            (email,),
+        )
+        if existing:
+            raise AppError(ErrorCode.PARAM_INVALID, "该邮箱已注册")
+    if phone:
+        existing = query_one(
+            "SELECT id FROM t_user WHERE phone = %s AND phone != '' AND is_delete = 0",
+            (phone,),
+        )
+        if existing:
+            raise AppError(ErrorCode.PARAM_INVALID, "该手机号已注册")
 
     user_id = generate_id()
     hashed = hash_password(password)
     nickname = f"用户{str(user_id)[-6:]}"
     execute(
-        "INSERT INTO t_user (id, phone, password, nickname, credits) VALUES (%s,%s,%s,%s,%s)",
-        (user_id, phone, hashed, nickname, 500),
+        "INSERT INTO t_user (id, email, phone, password, nickname, credits) VALUES (%s,%s,%s,%s,%s,%s)",
+        (user_id, email or "", phone or "", hashed, nickname, 500),
     )
     init_user_credits(user_id, 500)
 

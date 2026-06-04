@@ -4,9 +4,11 @@ from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...core.errors import AppError, ErrorCode
+from ...services.cache import invalidate_work
 from ...utils.crud import dynamic_update
 from ...utils.mysql import execute, query_all, query_one
 from ...utils.response import page_response, success_response
+from ...utils.writing_style import normalize_writing_style
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -217,6 +219,11 @@ def get_work_admin(work_id: int):
     for col in ("tags", "openings", "role_config"):
         work[col] = _parse_json_col(work.get(col))
 
+    # Extract writingStyle from role_config for frontend convenience
+    role_cfg = work.get("role_config") or {}
+    ws = role_cfg.get("writing_style") or {}
+    work["writingStyle"] = normalize_writing_style(ws)
+
     return success_response(work)
 
 
@@ -245,12 +252,27 @@ def update_work_admin(work_id: int):
         updates["tags"] = "%s"
         values.append(json.dumps(payload["tags"], ensure_ascii=False))
 
-    if not updates:
+    # Merge writingStyle into role_config (atomic JSON_SET, no read-modify-write)
+    role_config_sql = None
+    role_config_params = []
+    if "writingStyle" in payload:
+        ws = payload.get("writingStyle") or {}
+        writing_style_json = json.dumps(normalize_writing_style(ws), ensure_ascii=False)
+        role_config_sql = (
+            "JSON_SET(COALESCE(role_config, '{}'), '$.writing_style', CAST(%s AS JSON))"
+        )
+        role_config_params = [writing_style_json]
+
+    if not updates and not role_config_sql:
         raise AppError(ErrorCode.PARAM_INVALID, "没有需要修改的内容")
 
-    set_clause = ", ".join(f"`{k}` = %s" for k in updates)
+    set_parts = [f"`{k}` = %s" for k in updates]
+    values.extend(role_config_params)
     values.append(work_id)
-    execute(f"UPDATE t_work_card SET {set_clause} WHERE id = %s", tuple(values))
+    if role_config_sql:
+        set_parts.append(f"role_config = {role_config_sql}")
+    execute(f"UPDATE t_work_card SET {', '.join(set_parts)} WHERE id = %s", tuple(values))
+    invalidate_work(work_id)
     return success_response({"message": "更新成功"})
 
 

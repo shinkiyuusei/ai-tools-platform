@@ -31,6 +31,7 @@ class DeepSeekAdapter:
             "model": model or (self.config["reasoner_model"] if thinking_mode else self.config["chat_model"]),
             "messages": messages,
             "stream": False,
+            "max_tokens": 8192,
         }
         if thinking_mode:
             payload["thinking"] = {"type": "enabled"}
@@ -62,6 +63,7 @@ class DeepSeekAdapter:
             "model": model or (self.config["reasoner_model"] if thinking_mode else self.config["chat_model"]),
             "messages": messages,
             "stream": True,
+            "max_tokens": 524288,
         }
         if thinking_mode:
             payload["thinking"] = {"type": "enabled"}

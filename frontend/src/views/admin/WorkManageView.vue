@@ -17,6 +17,11 @@ const form = reactive({
   id: null, name: '', cover: '', desc: '', tags: '',
   categoryId: 0, useCount: 0, status: 1,
 })
+const writingStyle = ref({
+  contentMode: 'nsfw', sensoryDensity: 'high', pacingPreference: 'slow',
+  powerIntensity: 'extreme', proseStyle: 'direct', wordCount: 1500,
+})
+const showWritingStyle = ref(false)
 
 function addOpening() {
   if (openings.value.length >= 10) return
@@ -61,6 +66,9 @@ const openDetail = async (row) => {
       useCount: d.useCount ?? 0,
       status: d.status ?? 1,
     })
+    if (d.writingStyle) {
+      writingStyle.value = { ...writingStyle.value, ...d.writingStyle }
+    }
     formContent.value = JSON.stringify(d, null, 2)
     dialogVisible.value = true
   } catch { /* */ }
@@ -74,6 +82,7 @@ const handleSave = async () => {
     category: form.categoryId,
     useCount: form.useCount,
     status: form.status,
+    writingStyle: writingStyle.value,
   }
 
   if (form.tags) {
@@ -201,6 +210,66 @@ onMounted(fetchList)
               <button class="btn-add-opening" @click="addOpening">+ 添加开场白</button>
             </div>
             <div class="form-group form-span">
+              <button class="btn-toggle-ws" @click="showWritingStyle = !showWritingStyle">
+                {{ showWritingStyle ? '▼' : '▶' }} 写作风格配置
+              </button>
+            </div>
+            <div v-show="showWritingStyle" class="form-group form-span ws-inline">
+              <div class="ws-inline-group">
+                <div class="ws-inline-row">
+                  <span class="ws-inline-label">内容模式</span>
+                  <label class="ws-toggle-label">
+                    <span :class="{ on: writingStyle.contentMode === 'normal' }">正常</span>
+                    <input type="checkbox" class="ws-checkbox"
+                      :checked="writingStyle.contentMode === 'nsfw'"
+                      @change="writingStyle.contentMode = writingStyle.contentMode === 'nsfw' ? 'normal' : 'nsfw'" />
+                    <span :class="{ on: writingStyle.contentMode === 'nsfw' }">NSFW</span>
+                  </label>
+                </div>
+                <div class="ws-inline-row">
+                  <span class="ws-inline-label">感官密度</span>
+                  <select v-model="writingStyle.sensoryDensity" :disabled="writingStyle.contentMode !== 'nsfw'" class="base-select">
+                    <option value="low">轻量</option>
+                    <option value="medium">均衡</option>
+                    <option value="high">过载</option>
+                  </select>
+                </div>
+                <div class="ws-inline-row">
+                  <span class="ws-inline-label">叙事节奏</span>
+                  <select v-model="writingStyle.pacingPreference" :disabled="writingStyle.contentMode !== 'nsfw'" class="base-select">
+                    <option value="slow">慢热</option>
+                    <option value="balanced">均衡</option>
+                    <option value="fast">快节奏</option>
+                  </select>
+                </div>
+                <div class="ws-inline-row">
+                  <span class="ws-inline-label">支配强度</span>
+                  <select v-model="writingStyle.powerIntensity" :disabled="writingStyle.contentMode !== 'nsfw'" class="base-select">
+                    <option value="mild">温和</option>
+                    <option value="medium">标准</option>
+                    <option value="extreme">极限</option>
+                  </select>
+                </div>
+                <div class="ws-inline-row">
+                  <span class="ws-inline-label">文风倾向</span>
+                  <select v-model="writingStyle.proseStyle" :disabled="writingStyle.contentMode !== 'nsfw'" class="base-select">
+                    <option value="literary">文学化</option>
+                    <option value="direct">直白</option>
+                  </select>
+                </div>
+                <div class="ws-inline-row">
+                  <span class="ws-inline-label">目标字数</span>
+                  <div class="ws-wordcount-wrap">
+                    <input type="range" v-model.number="writingStyle.wordCount"
+                      :min="writingStyle.contentMode === 'nsfw' ? 1000 : 400"
+                      :max="writingStyle.contentMode === 'nsfw' ? 3000 : 1500"
+                      :disabled="writingStyle.contentMode !== 'nsfw'" step="100" class="ws-range" />
+                    <span class="ws-wordcount-val">{{ writingStyle.wordCount }} 字</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group form-span">
               <label>Content JSON（高级编辑）</label>
               <textarea v-model="formContent" rows="12" class="field-textarea code-area"></textarea>
             </div>
@@ -290,4 +359,27 @@ th { background: var(--bg-elevated); font-weight: 600; color: var(--text-seconda
 }
 .base-select { padding: 8px 12px; background: var(--bg-elevated); border: 1px solid var(--border-input); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 13px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-lg); }
+
+/* writingStyle inline */
+.btn-toggle-ws {
+  width: 100%; padding: 10px 14px; border: 1px dashed var(--border-primary); border-radius: var(--radius-md);
+  background: transparent; color: var(--text-tertiary); font-size: 13px; cursor: pointer; text-align: left;
+  transition: all var(--transition-fast);
+}
+.btn-toggle-ws:hover { border-color: #f0a040; color: #f0a040; }
+.ws-inline { background: var(--bg-elevated); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 14px; }
+.ws-inline-group { display: flex; flex-direction: column; gap: 12px; }
+.ws-inline-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ws-inline-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+.ws-toggle-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); cursor: pointer; }
+.ws-toggle-label span.on { color: var(--text-primary); font-weight: 600; }
+.ws-checkbox { display: none; }
+.ws-toggle-label input[type="checkbox"] { appearance: none; width: 40px; height: 22px; background: var(--bg-tertiary); border-radius: 11px; position: relative; cursor: pointer; outline: none; margin: 0 4px; }
+.ws-toggle-label input[type="checkbox"]:checked { background: #f0a040; }
+.ws-toggle-label input[type="checkbox"]::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+.ws-toggle-label input[type="checkbox"]:checked::after { transform: translateX(18px); }
+.ws-wordcount-wrap { display: flex; align-items: center; gap: 10px; }
+.ws-range { flex: 1; height: 6px; -webkit-appearance: none; appearance: none; background: var(--bg-tertiary); border-radius: 3px; outline: none; }
+.ws-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #f0a040; cursor: pointer; }
+.ws-wordcount-val { font-size: 12px; font-weight: 600; color: #f0a040; min-width: 52px; text-align: right; }
 </style>

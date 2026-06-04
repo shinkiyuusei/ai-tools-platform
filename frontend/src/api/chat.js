@@ -23,8 +23,17 @@ export const chatApi = {
   async uploadCover(file) {
     const formData = new FormData()
     formData.append('file', file)
+    const csrfToken = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('csrf_access_token='))
+      ?.split('=')[1]
     const res = await fetch('/api/v1/chat/work/upload-cover', {
       method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+      },
       body: formData,
     })
     const data = await res.json()
