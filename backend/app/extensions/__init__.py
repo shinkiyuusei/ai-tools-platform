@@ -53,7 +53,7 @@ def init_extensions(app):
     mysql_config = dict(app.config["MYSQL_CONFIG"])
     init_pool(mysql_config)
 
-    redis_client = redis.from_url(app.config["REDIS_URL"], decode_responses=True)
+    redis_client = redis.from_url(app.config["REDIS_URL"], decode_responses=True, protocol=2)
 
 
 def get_redis_client():

@@ -349,11 +349,26 @@ def update_user_admin(target_user_id: int):
     _check_admin(user_id)
 
     payload = request.get_json(silent=True) or {}
+
+    # Credits must go through the Redis-backed credit service, not MySQL directly.
+    # Otherwise the admin change gets overwritten by the periodic Redis→MySQL sync.
+    if "credits" in payload:
+        from ...services.credit import get_balance, grant, sync_all_to_mysql
+
+        new_credits = int(payload["credits"])
+        old_credits = get_balance(target_user_id)
+        delta = new_credits - old_credits
+        if delta != 0:
+            grant(target_user_id, delta, source_type="admin_grant")
+            # Force immediate MySQL sync so the admin list shows the updated value
+            sync_all_to_mysql()
+        # Remove credits from payload so dynamic_update doesn't touch MySQL
+        del payload["credits"]
+
     field_map = {
         "nickname": "nickname",
         "vipLevel": "vip_level",
         "vipExpireTime": "vip_expire_time",
-        "credits": "credits",
         "status": "status",
     }
     dynamic_update("t_user", field_map, payload, "id", target_user_id)
