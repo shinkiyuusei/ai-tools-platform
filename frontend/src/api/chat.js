@@ -9,7 +9,7 @@ export const chatApi = {
   getWorks(params) {
     return http.get('/chat/works', { params })
   },
-  sendMessage({ messages, systemPrompt, model, thinkingMode = false, reasoningEffort = 'medium', sceneContext, conversationId }) {
+  sendMessage({ messages, systemPrompt, model, thinkingMode = false, reasoningEffort = 'medium', sceneContext, conversationId, aiProvider }) {
     return http.post('/ai/chat/completions', {
       messages,
       systemPrompt,
@@ -18,6 +18,7 @@ export const chatApi = {
       reasoningEffort,
       sceneContext,
       conversationId,
+      aiProvider: aiProvider || 'deepseek',
     })
   },
   async uploadCover(file) {
@@ -64,7 +65,7 @@ export const chatApi = {
   deleteWork(workId) {
     return http.delete(`/chat/work/${workId}`)
   },
-  sendMessageStream({ messages, systemPrompt, model, thinkingMode = false, reasoningEffort = 'medium', sceneContext, conversationId }) {
+  sendMessageStream({ messages, systemPrompt, model, thinkingMode = false, reasoningEffort = 'medium', sceneContext, conversationId, aiProvider }) {
     const controller = new AbortController()
     let cancelled = false
 
@@ -93,7 +94,7 @@ export const chatApi = {
             'X-Requested-With': 'XMLHttpRequest',
             ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
           },
-          body: JSON.stringify({ messages, systemPrompt, model, thinkingMode, reasoningEffort, sceneContext, conversationId }),
+          body: JSON.stringify({ messages, systemPrompt, model, thinkingMode, reasoningEffort, sceneContext, conversationId, aiProvider: aiProvider || 'deepseek' }),
           signal: controller.signal,
         })
 

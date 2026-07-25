@@ -2,9 +2,12 @@
 import { ref, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { chatApi, conversationApi } from '../api/chat'
+import { worldInfoApi } from '../api/worldInfo'
 import { useAuthStore } from '../stores/auth'
 import AppLayout from '../layouts/AppLayout.vue'
 import { formatTokens } from '../utils/format'
+import { parseImmersiveContent, extractStatusSection } from '../utils/messageRenderer'
+import StatusPanel from '../components/StatusPanel.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -17,6 +20,8 @@ const inputText = ref('')
 const sending = ref(false)
 const selectedModel = ref('deepseek-v4-flash')
 const thinkingMode = ref(false)
+const aiProvider = ref('deepseek')
+const activeLoreEntries = ref([])
 const activeStream = ref(null)
 const currentConversationId = ref(null)
 const conversationList = ref([])
@@ -26,6 +31,7 @@ const selectedPerspectiveKey = ref('')
 const perspectiveOptions = ref([])
 const switchingPerspective = ref(false)
 const favorited = ref(false)
+const statusSchema = ref([])
 
 // ---- Opening tooltip ----
 const tooltipText = ref('')
@@ -45,6 +51,13 @@ function showTooltip(e, text) {
 
 function hideTooltip() {
   tooltipText.value = ''
+}
+
+const loadActiveLore = async () => {
+  try {
+    const res = await worldInfoApi.list('work', workId)
+    activeLoreEntries.value = res.data || []
+  } catch { /* silent */ }
 }
 
 const checkFavoriteStatus = async () => {
@@ -99,7 +112,7 @@ const saveMessages = async () => {
 
 const loadConversationList = async () => {
   try {
-    const res = await conversationApi.list(workId, 1, 20)
+    const res = await conversationApi.list(workId, 'work', 1, 20)
     conversationList.value = res.data.list || []
   } catch (e) {
     console.error('Failed to load conversations:', e)
@@ -137,6 +150,7 @@ const loadWork = async (perspectiveKey = '') => {
     const params = perspectiveKey ? { perspective: perspectiveKey } : {}
     const res = await chatApi.getWorkConfig(workId, params)
     work.value = res.data
+    statusSchema.value = res.data.statusSchema || []
     buildPerspectiveOptions()
   } catch (e) {
     console.error('Failed to load work:', e)
@@ -210,6 +224,7 @@ const doStreamSend = (msgList) => {
     reasoningEffort: 'high',
     sceneContext: sceneContext.value,
     conversationId: currentConversationId.value,
+    aiProvider: aiProvider.value,
   })
 
   stream.onChunk = (chunk) => {
@@ -219,11 +234,14 @@ const doStreamSend = (msgList) => {
   stream.onDone = async () => {
     rxMsg.streaming = false
     rxMsg.choices = parseChoices(rxMsg.content)
+    rxMsg.statusData = extractStatusSection(rxMsg.content)
     sceneContext.value = extractSceneContext(rxMsg.content)
     sending.value = false
     activeStream.value = null
     scrollToBottom()
     await saveMessages()
+    loadConversationList()
+    loadActiveLore()
     auth.refreshCredits()
   }
   stream.onError = async (err) => {
@@ -305,9 +323,15 @@ const parseChoices = (content) => {
   if (idx === -1) return []
   const after = content.slice(idx)
   const lines = after.split('\n')
-  return lines
+  const choices = lines
     .filter((l) => /^[A-E][.、)]/.test(l.trim()))
     .map((l) => l.trim())
+  if (choices.length === 1) {
+    // Handle single-line format: "A. xxx / B. xxx / C. xxx / D. xxx"
+    const split = choices[0].split(/\s*\/\s*(?=[A-E][.、)])/g)
+    if (split.length > 1) return split.map((s) => s.trim()).filter(Boolean)
+  }
+  return choices
 }
 
 const stripChoices = (content) => {
@@ -316,13 +340,16 @@ const stripChoices = (content) => {
 }
 
 const displayContent = (content) => {
-  // strip choice section and collapse consecutive empty lines
+  // strip choice section first (existing logic)
   let text = stripChoices(content)
   // collapse triple-backtick code blocks to plain text
   text = text.replace(/```/g, '')
   // collapse 2+ newlines to a single newline (no blank lines)
   text = text.replace(/\n{2,}/g, '\n')
-  return text.trimEnd()
+  text = text.trimEnd()
+  // apply immersive rendering (inner thoughts + dialogue + status extraction)
+  const { html } = parseImmersiveContent(text)
+  return html
 }
 
 const pickChoice = (text) => {
@@ -353,6 +380,7 @@ const deleteConversation = async (convId) => {
 onMounted(async () => {
   await loadWork()
   checkFavoriteStatus()
+  loadActiveLore()
   if (work.value) {
     await loadConversationList()
     if (conversationList.value.length > 0) {
@@ -410,7 +438,7 @@ onMounted(async () => {
             <div class="msg-avatar">{{ msg.role === 'user' ? '我' : 'AI' }}</div>
             <div class="msg-body">
               <div class="msg-content" :class="{ error: msg.error, streaming: msg.streaming }">
-                {{ displayContent(msg.content) }}<span v-if="msg.streaming" class="stream-cursor">|</span>
+                <span v-html="displayContent(msg.content)"></span><span v-if="msg.streaming" class="stream-cursor">|</span>
               </div>
               <div
                 v-if="msg.choices && msg.choices.length"
@@ -425,6 +453,11 @@ onMounted(async () => {
                   {{ c }}
                 </button>
               </div>
+              <StatusPanel
+                v-if="msg.role === 'assistant' && !msg.streaming && msg.statusData"
+                :status-data="msg.statusData"
+                :schema="statusSchema"
+              />
             </div>
           </div>
         </div>
@@ -462,6 +495,21 @@ onMounted(async () => {
           <div class="sb-meta">
             <span v-if="work.author">{{ work.author }}</span>
             <span>{{ formatTokens(work.useCount) }}</span>
+          </div>
+        </div>
+
+        <!-- Active World Info / Lore -->
+        <div v-if="activeLoreEntries.length > 0" class="sb-card sb-lore">
+          <div class="sb-label">世界设定 ({{ activeLoreEntries.length }})</div>
+          <div
+            v-for="entry in activeLoreEntries"
+            :key="entry.id"
+            class="lore-entry"
+          >
+            <div class="lore-keys">
+              <span v-for="key in entry.keys" :key="key" class="lore-tag">{{ key }}</span>
+            </div>
+            <div class="lore-content">{{ entry.content }}</div>
           </div>
         </div>
 
@@ -732,6 +780,18 @@ onMounted(async () => {
 }
 
 .msg-content.streaming { padding-right: 8px; }
+
+/* ---- Immersive rendering: inner thoughts & dialogue ---- */
+.msg-content :deep(.inner-thought) {
+  color: var(--text-tertiary);
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.msg-content :deep(.dialogue) {
+  color: #e895a8;
+  font-weight: 500;
+}
 
 .choice-buttons {
   display: flex;

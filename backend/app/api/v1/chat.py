@@ -14,7 +14,7 @@ from ...services.cache import (
     cache_get, cache_set, LIST_TTL,
 )
 from ...services.chat.prompt_builder import build_enhanced_system_prompt
-from ...utils.writing_style import normalize_writing_style
+from ...utils.writing_style import normalize_writing_style, resolve_work_status_schemas
 
 chat_bp = Blueprint("chat", __name__)
 
@@ -47,17 +47,10 @@ def _parse_json(col, default=None):
     return val if isinstance(val, (dict, list)) else default
 
 
-def _build_work_data(work, perspective=None):
-    """Build the work response data dict (without response wrapper)."""
-    work_name = work.get("name", "")
-    role_config = _parse_json(work.get("role_config"), {})
-    openings = _parse_json(work.get("openings"), [])
-
-    # Default NSFW writing style — any work card is NSFW unless explicitly set otherwise
-    stored_writing_style = role_config.get("writing_style") or role_config.get("writingStyle") or {}
-    writing_style = normalize_writing_style(stored_writing_style)
-
-    legacy = {
+def _build_legacy_dict(work, role_config):
+    """Build the 'legacy' config dict consumed by prompt builders."""
+    stored_ws = role_config.get("writing_style") or role_config.get("writingStyle") or {}
+    return {
         "author": work.get("author", ""),
         "detailedIntro": work.get("summary", ""),
         "opening": work.get("opening", ""),
@@ -78,8 +71,18 @@ def _build_work_data(work, perspective=None):
         },
         "gameRules": role_config.get("play_rule", ""),
         "statusBar": role_config.get("status_bar", ""),
-        "writingStyle": writing_style,
+        "writingStyle": normalize_writing_style(stored_ws),
     }
+
+
+def _build_work_data(work, perspective=None):
+    """Build the work response data dict (without response wrapper)."""
+    work_name = work.get("name", "")
+    role_config = _parse_json(work.get("role_config"), {})
+    openings = _parse_json(work.get("openings"), [])
+
+    legacy = _build_legacy_dict(work, role_config)
+    writing_style = legacy["writingStyle"]
 
     full_prompt = build_enhanced_system_prompt(work_name, legacy, perspective)
 
@@ -105,7 +108,8 @@ def _build_work_data(work, perspective=None):
         "isFree": True,
         "isVip": False,
         "useCount": work.get("useCount", 0),
-        "aiApi": "deepseek",
+        "aiApi": role_config.get("ai_provider", "deepseek"),
+        "aiProvider": role_config.get("ai_provider", "deepseek"),
         "opening": opening_text,
         "openingStatements": opening_statements,
         "systemPrompt": full_prompt,
@@ -129,6 +133,11 @@ def _build_work_data(work, perspective=None):
         "gameRules": role_config.get("play_rule", ""),
         "statusBar": role_config.get("status_bar", ""),
         "writingStyle": writing_style,
+        "statusSchema": resolve_work_status_schemas(
+            writing_style.get("contentMode", "nsfw"),
+            role_config.get("npc_settings", []),
+            role_config.get("protagonist_setting", {}),
+        ),
     }
 
 
@@ -180,6 +189,12 @@ def _make_role_config(payload):
     # Only store writing_style if explicitly provided
     if ws.get("contentMode"):
         rc["writing_style"] = normalize_writing_style(ws)
+    # Store statusSchema if provided
+    if "statusSchema" in payload:
+        rc["statusSchema"] = payload["statusSchema"]
+    # AI provider
+    if payload.get("aiProvider"):
+        rc["ai_provider"] = payload["aiProvider"]
     return rc
 
 

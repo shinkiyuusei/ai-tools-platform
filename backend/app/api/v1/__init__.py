@@ -12,6 +12,8 @@ from .i18n import i18n_bp
 from .monitoring import monitoring_bp
 from .recharge import recharge_bp
 from .user import user_bp
+from .world_info import world_info_bp
+from .extensions import extensions_bp
 
 
 def register_v1_blueprints(app):
@@ -29,5 +31,7 @@ def register_v1_blueprints(app):
     api_v1.register_blueprint(recharge_bp)
     api_v1.register_blueprint(chat_bp)
     api_v1.register_blueprint(conv_bp)
+    api_v1.register_blueprint(world_info_bp)
+    api_v1.register_blueprint(extensions_bp)
 
     app.register_blueprint(api_v1)

@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   mysql:
-    image: mysql:8.0
+    image: mysql:8.4
     container_name: ai_tools_mysql
     restart: unless-stopped
     environment:
@@ -13,12 +11,12 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - C:/ProgramData/MySQL/MySQL Server 8.4/Data:/var/lib/mysql
       - ./database:/docker-entrypoint-initdb.d
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --lower-case-table-names=1 --disable-log-bin
 
   redis:
-    image: redis:7-alpine
+    image: docker.m.daocloud.io/library/redis:7-alpine
     container_name: ai_tools_redis
     restart: unless-stopped
     command: redis-server --requirepass redis123456
@@ -26,6 +24,15 @@ services:
       - "6380:6379"
     volumes:
       - redis_data:/data
+
+  extension-compiler:
+    build: ./backend/extension-compiler
+    container_name: ai_tools_ext_compiler
+    restart: unless-stopped
+    ports:
+      - "3456:3456"
+    volumes:
+      - ./backend/extensions:/extensions:ro
 
 volumes:
   mysql_data:

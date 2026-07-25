@@ -42,6 +42,7 @@ const form = reactive({
   statusBar: '',
   openings: [{ label: '', text: '' }],
   writingStyle: { contentMode: 'nsfw', sensoryDensity: 'high', pacingPreference: 'slow', powerIntensity: 'extreme', proseStyle: 'direct', wordCount: 1500 },
+  aiProvider: 'deepseek',
 })
 
 const EMPTY_WORK_FORM = {
@@ -50,6 +51,7 @@ const EMPTY_WORK_FORM = {
   worldSetting: { worldName: '', eraTech: '', coreConflict: '', toneAtmosphere: '', mainPlot: '', initialState: '' },
   gameRules: '', statusBar: '', openings: [{ label: '', text: '' }],
   writingStyle: { contentMode: 'nsfw', sensoryDensity: 'high', pacingPreference: 'slow', powerIntensity: 'extreme', proseStyle: 'direct', wordCount: 1500 },
+  aiProvider: 'deepseek',
 }
 
 const EMPTY_CHARACTER_FORM = {
@@ -222,6 +224,7 @@ async function handleSave() {
       openingStatements: form.openings.filter(o => o.text.trim()),
       writingStyle: form.writingStyle,
       models: ['deepseek-v4-flash'],
+      aiProvider: form.aiProvider || 'deepseek',
     }
     if (isEdit.value && editingWorkId.value) {
       await chatApi.updateWork(editingWorkId.value, payload)

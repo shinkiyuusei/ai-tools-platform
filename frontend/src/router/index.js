@@ -18,6 +18,8 @@ import CharacterManageView from '../views/admin/CharacterManageView.vue'
 import TagManageView from '../views/admin/TagManageView.vue'
 import UserManageView from '../views/admin/UserManageView.vue'
 import WorkManageView from '../views/admin/WorkManageView.vue'
+import ExtensionManageView from '../views/admin/ExtensionManageView.vue'
+import ExtensionMarketplaceView from '../views/ExtensionMarketplaceView.vue'
 
 const routes = [
   { path: '/', redirect: '/explore' },
@@ -39,6 +41,8 @@ const routes = [
   { path: '/admin/user', name: 'admin-user', component: UserManageView, meta: { requiresAuth: true } },
   { path: '/admin/character', name: 'admin-character', component: CharacterManageView, meta: { requiresAuth: true } },
   { path: '/admin/work', name: 'admin-work', component: WorkManageView, meta: { requiresAuth: true } },
+  { path: '/admin/extensions', name: 'admin-extensions', component: ExtensionManageView, meta: { requiresAuth: true } },
+  { path: '/extensions', name: 'extensions', component: ExtensionMarketplaceView },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: ErrorView, props: { code: 404 } },
 ]
 

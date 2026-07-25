@@ -5,6 +5,8 @@ import { characterApi } from '../api/character'
 import { conversationApi } from '../api/chat'
 import { useAuthStore } from '../stores/auth'
 import AppLayout from '../layouts/AppLayout.vue'
+import { parseImmersiveContent, extractStatusSection } from '../utils/messageRenderer'
+import StatusPanel from '../components/StatusPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,6 +25,8 @@ const currentConversationId = ref(null)
 const conversationList = ref([])
 const liked = ref(false)
 const collected = ref(false)
+const latestStatus = ref(null)
+const statusSchema = ref([])
 
 const models = [
   { key: 'deepseek-v4-flash', label: 'DeepSeek Flash' },
@@ -43,6 +47,7 @@ const ensureConversation = async () => {
 const loadChatConfig = async () => {
   try {
     const res = await characterApi.getChatConfig(characterId)
+      statusSchema.value = res.data.statusSchema || []
     character.value = res.data
   } catch (e) {
     console.error('Failed to load character config:', e)
@@ -136,6 +141,7 @@ const sendMessage = async () => {
         model: selectedModel.value,
         thinkingMode: thinkingMode.value,
         conversationId: currentConversationId.value,
+        aiProvider: 'deepseek',
       }),
       signal: controller.signal,
     })
@@ -167,6 +173,12 @@ const sendMessage = async () => {
     }
 
     try {
+
+      // Extract status from the completed assistant response
+      const statusData = extractStatusSection(messages.value[assistantIdx].content)
+      if (statusData) {
+        latestStatus.value = statusData
+      }
       await conversationApi.saveMessages(currentConversationId.value, [
         { role: 'user', content: text },
         { role: 'assistant', content: messages.value[assistantIdx].content },
@@ -221,7 +233,8 @@ const viewDetail = () => {
 
 const formatContent = (content) => {
   if (!content) return ''
-  return content.replace(/\n/g, '<br>')
+  const { html } = parseImmersiveContent(content)
+  return html
 }
 
 onMounted(async () => {
@@ -276,7 +289,14 @@ onMounted(async () => {
               <template v-if="msg.role === 'user'">你</template>
               <template v-else>{{ character?.name?.slice(0, 2) || 'AI' }}</template>
             </div>
-            <div class="msg-content" v-html="formatContent(msg.content)"></div>
+            <div class="msg-body">
+              <div class="msg-content" v-html="formatContent(msg.content)"></div>
+              <StatusPanel
+                v-if="msg.role === 'assistant' && !msg.streaming && statusSchema.length"
+                :status-data="extractStatusSection(msg.content)"
+                :schema="statusSchema"
+              />
+            </div>
           </div>
 
           <div v-if="sending" class="message assistant">
@@ -747,6 +767,18 @@ onMounted(async () => {
   background: var(--color-misty-blue-deep);
   color: #fff;
   border-color: transparent;
+}
+
+/* ---- Immersive rendering: inner thoughts & dialogue ---- */
+.msg-content :deep(.inner-thought) {
+  color: var(--text-tertiary);
+  font-style: italic;
+  opacity: 0.75;
+}
+
+.msg-content :deep(.dialogue) {
+  color: #e895a8;
+  font-weight: 500;
 }
 
 .typing {

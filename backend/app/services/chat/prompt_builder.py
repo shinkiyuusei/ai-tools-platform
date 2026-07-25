@@ -321,13 +321,31 @@ def _resolve_perspective(
 #  Main entry point
 # ---------------------------------------------------------------------------
 
+def _fmt_lore_entries(entries: list) -> str:
+    """Format a list of world-info entry dicts into a compact prompt block."""
+    if not entries:
+        return ""
+    parts = ["# 世界设定书（当前激活）\n以下是在当前对话情境下激活的世界设定条目，你必须严格遵守这些设定，并将相关信息融入叙事中："]
+    for i, entry in enumerate(entries, 1):
+        comment = f" // {entry['comment']}" if entry.get("comment") else ""
+        parts.append(f"{i}. {entry['content']}{comment}")
+    return "\n".join(parts)
+
+
 def build_enhanced_system_prompt(
     work_name: str,
     config: dict,
     perspective: dict = None,
     character_states: dict = None,
+    active_lore_entries: dict = None,
 ) -> str:
-    """Build the full enhanced system prompt for immersive interactive fiction."""
+    """Build the full enhanced system prompt for immersive interactive fiction.
+
+    Parameters
+    ----------
+    active_lore_entries : dict | None
+        Result of ``world_info.get_active_lore()`` — ``{"always": [...], "selective": [...]}``.
+    """
     characters = list(config.get("characters", []))
     protagonist = config.get("protagonist", {})
     world = config.get("worldSetting", {})
@@ -344,7 +362,7 @@ def build_enhanced_system_prompt(
         pacing_preference = "slow"        # 慢节奏，将性爱互动拉长拆碎
         power_intensity = "extreme"       # 性支配与反差崩溃推向极致
         prose_style = "direct"            # 直白冲击，杜绝扭捏
-        target_word_count = max(writing_style.get("wordCount", 1500), 1500) # 扩充至至少1500字
+        target_word_count = max(writing_style.get("wordCount", 5000), 5000) # 扩充至至少5000字
     else:
         sensory_density = writing_style.get("sensoryDensity", "medium")
         pacing_preference = writing_style.get("pacingPreference", "balanced")
@@ -370,6 +388,12 @@ def build_enhanced_system_prompt(
     sex_guidelines = _build_sex_scene_guidelines()
     states_block = _fmt_character_states(character_states)
 
+    # Format active lore entries
+    lore_always = (active_lore_entries or {}).get("always", [])
+    lore_selective = (active_lore_entries or {}).get("selective", [])
+    lore_block = _fmt_lore_entries(lore_always)
+    lore_selective_block = _fmt_lore_entries(lore_selective) if lore_selective else ""
+
     template_name = f"{content_mode}.jinja2"
     template = _env.get_template(template_name)
     return template.render(
@@ -387,6 +411,8 @@ def build_enhanced_system_prompt(
         sensory_section=sensory_section,
         pacing_section=pacing_section,
         power_section=power_section,
+        lore_block=lore_block,
+        lore_selective_block=lore_selective_block,
         prose_guidance=prose_guidance,
         sex_guidelines=sex_guidelines,
         target_word_count=target_word_count,
@@ -400,20 +426,92 @@ def build_enhanced_system_prompt(
 def parse_character_states(content: str) -> dict | None:
     """Parse character states from the AI response status bar section.
 
-    Expected format:
+    Supports two formats:
+
+    1. Multi-character (new):
+        【角色状态栏】
+
+        何乃慧
+        服装：水手服短裙白丝
+        表情：羞涩脸红
+        好感度：55（+5）
+
+        阿龙
+        服装：黑色紧身T恤
+        肉棒状态：坚硬如铁
+
+    2. Single-character (legacy):
         【角色状态栏】
         伴侣状态：紧张的女友关系
         好感度：45 (+5)
-        欲望值：80 (+20)
 
-    Returns a dict like {"女主": {"好感度": 45, "欲望值": 80}} or None.
+    Returns a dict like {"何乃慧": {"服装": "水手服", "好感度": 55}, "阿龙": {...}} or None.
     """
     marker = "【角色状态栏】"
     idx = content.find(marker)
     if idx == -1:
         return None
-    section = content[idx:].split("\n\n")[0]
 
+    # Extract from marker to the next 【 marker or end of string
+    rest = content[idx + len(marker):]
+    next_marker = rest.find("【")
+    section = rest[:next_marker] if next_marker != -1 else rest
+    section = section.strip()
+    if not section:
+        return None
+
+    # Detect format: multi-character has role-name headers (lines without colon)
+    lines = section.split("\n")
+    has_role_headers = any(
+        line.strip() and "：" not in line and ":" not in line and len(line.strip()) <= 20
+        for line in lines
+    )
+
+    if has_role_headers:
+        return _parse_multi_character_states(lines)
+    else:
+        return _parse_legacy_character_states(section)
+
+
+def _parse_multi_character_states(lines: list) -> dict | None:
+    """Parse multi-character STATUS format with role name headers."""
+    result = {}
+    current_char = None
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Check if this line is a role name header (short line without colon)
+        if ("：" not in stripped and ":" not in stripped and len(stripped) <= 20):
+            # Could be a character name header
+            current_char = stripped
+            if current_char not in result:
+                result[current_char] = {}
+            continue
+
+        # Field line: "字段名：值" or "字段名: 值"
+        field_match = re.match(r"^([^：:]+)[：:]\s*(.+)$", stripped)
+        if field_match and current_char:
+            key = field_match.group(1).strip()
+            raw_value = field_match.group(2).strip()
+
+            # Try numeric extraction: "55（+5）" or "55 (+5)" or "45"
+            num_match = re.match(r"^(\d+)\s*(?:[（(]\s*([+-]?\d+)\s*[）)])?", raw_value)
+            if num_match:
+                value = int(num_match.group(1))
+                delta = int(num_match.group(2)) if num_match.group(2) else 0
+                result[current_char][key] = value
+            else:
+                # Text value
+                result[current_char][key] = raw_value
+
+    return result if result else None
+
+
+def _parse_legacy_character_states(section: str) -> dict | None:
+    """Parse legacy single-character STATUS format (backward compatible)."""
     partner_match = re.search(r"伴侣状态[：:]\s*(.+?)(?:\n|$)", section)
     partner_name = partner_match.group(1).strip() if partner_match else "未知"
 

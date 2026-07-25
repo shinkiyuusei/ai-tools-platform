@@ -5,9 +5,10 @@ from flask import Blueprint, request, Response, stream_with_context
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...core.errors import AppError, ErrorCode
-from ...services.ai.deepseek import DeepSeekAdapter, TOKEN_USAGE_SIGNAL
+from ...services.ai.adapters import get_adapter, TOKEN_USAGE_SIGNAL
 from ...services.audit import audit_content
-from ...services.chat.prompt_builder import parse_character_states
+from ...services.chat.prompt_builder import parse_character_states, _fmt_lore_entries
+from ...services.world_info import get_active_lore
 from ...services.credit import deduct, get_balance
 from datetime import date
 
@@ -159,7 +160,8 @@ def chat_completions():
     if not audit_input["passed"]:
         raise AppError(ErrorCode.PARAM_INVALID, audit_input["message"])
 
-    service = DeepSeekAdapter()
+    provider = payload.get("aiProvider") or "deepseek"
+    service = get_adapter(provider)
     result = service.chat_completion(
         messages=normalized_messages,
         model=model,
@@ -259,6 +261,13 @@ def chat_completions_stream():
                     normalized_messages[i]["content"] = scene_prefix + normalized_messages[i]["content"]
                     break
 
+    # extract latest user message early (needed for content audit + lore matching)
+    latest_user_content = ""
+    for item in reversed(normalized_messages):
+        if item["role"] == "user":
+            latest_user_content = item["content"]
+            break
+
     # load persisted character state from conversation and inject into system prompt
     character_state = None
     entity_id = 0
@@ -289,6 +298,16 @@ def chat_completions_stream():
                 state_lines.append(" · ".join(parts))
             system_prompt += "\n" + "\n".join(state_lines)
 
+        # --- World Info lore injection (runtime, per-request) ---
+        if entity_type == "work" and entity_id and latest_user_content:
+            try:
+                lore = get_active_lore("work", entity_id, latest_user_content)
+                lore_block = _fmt_lore_entries(lore.get("always", []))
+                if lore_block:
+                    system_prompt += "\n" + lore_block
+            except Exception:
+                pass  # lore injection is best-effort, never break the stream
+
         if normalized_messages[0]["role"] != "system":
             normalized_messages.insert(0, {"role": "system", "content": system_prompt})
         elif system_prompt and normalized_messages[0]["role"] == "system":
@@ -296,16 +315,12 @@ def chat_completions_stream():
             if character_state:
                 normalized_messages[0]["content"] = system_prompt
 
-    latest_user_content = ""
-    for item in reversed(normalized_messages):
-        if item["role"] == "user":
-            latest_user_content = item["content"]
-            break
     audit_input = audit_content(latest_user_content)
     if not audit_input["passed"]:
         raise AppError(ErrorCode.PARAM_INVALID, audit_input["message"])
 
-    service = DeepSeekAdapter()
+    provider = payload.get("aiProvider") or "deepseek"
+    service = get_adapter(provider)
 
     _ensure_credits(user_id)
 
@@ -364,6 +379,19 @@ def chat_completions_stream():
                     )
             except Exception:
                 pass  # state persistence is best-effort, don't break the stream
+
+        # Guard: if AI omitted the required markers, inject fallback
+        full_text = "".join(full_response)
+        if "【角色状态栏】" not in full_text:
+            guard = "\n\n【角色状态栏】\n服装：—\n表情：—\n想法：—\n"
+            full_response.append(guard)
+            yield f"data: {guard}\n\n"
+        if "【抉择分支】" not in full_text:
+            guard = "\n\n【抉择分支】\nA. 继续当前行动\nB. 换个方式\nC. 观察周围\nD. 自由行动 —— 输入你想做的任何事。\n"
+            full_response.append(guard)
+            for chunk in [guard]:
+                escaped = "\ndata: ".join(chunk.split("\n"))
+                yield f"data: {escaped}\n\n"
 
         yield "data: [DONE]\n\n"
 

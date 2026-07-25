@@ -40,12 +40,22 @@ class BaseConfig:
         redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
         redis_port = os.getenv("REDIS_DB_PORT", "6379")
         self.REDIS_URL = f"redis://:{redis_password}@{redis_host}:{redis_port}/0"
-        self.DEEPSEEK_CONFIG = {
-            "base_url": os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com"),
-            "api_key": os.getenv("DEEPSEEK_API_KEY", ""),
-            "chat_model": os.getenv("DEEPSEEK_CHAT_MODEL", "deepseek-v4-flash"),
-            "reasoner_model": os.getenv("DEEPSEEK_REASONER_MODEL", "deepseek-v4-pro"),
+        self.AI_BACKENDS = {
+            "deepseek": {
+                "base_url": os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com"),
+                "api_key": os.getenv("DEEPSEEK_API_KEY", ""),
+                "chat_model": os.getenv("DEEPSEEK_CHAT_MODEL", "deepseek-v4-flash"),
+                "reasoner_model": os.getenv("DEEPSEEK_REASONER_MODEL", "deepseek-v4-pro"),
+            },
+            "openai": {
+                "base_url": os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"),
+                "api_key": os.getenv("OPENAI_API_KEY", ""),
+                "chat_model": os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
+            },
         }
+        # Backward-compatible alias
+        self.DEEPSEEK_CONFIG = self.AI_BACKENDS["deepseek"]
+        self.DEFAULT_AI_PROVIDER = os.getenv("DEFAULT_AI_PROVIDER", "deepseek")
         self.ALIPAY_CONFIG = {
             "app_id": os.getenv("ALIPAY_APP_ID", ""),
             "app_private_key": os.getenv("ALIPAY_APP_PRIVATE_KEY", "").replace("\\n", "\n"),

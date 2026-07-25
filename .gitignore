@@ -36,3 +36,4 @@ uploads/
 *.jpeg
 *.gif
 *.bmp
+backend/extension-compiler/node_modules/

@@ -21,6 +21,7 @@ const menuList = [
   { to: '/my-characters', label: '我的角色', desc: '管理角色卡', icon: '◇', color: 'candy' },
   { to: '/my-works',      label: '我的作品', desc: '管理作品卡', icon: '◇', color: 'misty' },
   { to: '/favorites',     label: '我的收藏', desc: '收藏作品', icon: '♥', color: 'crimson' },
+  { to: '/extensions',    label: '扩展',     desc: '扩展市场', icon: '◇', color: 'gold' },
 ]
 
 const adminMenuList = [
@@ -28,6 +29,7 @@ const adminMenuList = [
   { to: '/admin/character', label: '角色卡管理', icon: '▣', color: 'gold' },
   { to: '/admin/tag', label: '标签管理', icon: '▣', color: 'gold' },
   { to: '/admin/user', label: '用户管理', icon: '▣', color: 'gold' },
+  { to: '/admin/extensions', label: '扩展管理', icon: '▣', color: 'gold' },
 ]
 
 const errorMessage = ref('')

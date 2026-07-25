@@ -14,7 +14,7 @@ from ...utils.mysql import query_one, query_all, execute
 from ...utils.response import success_response, page_response
 from ...core.errors import AppError, ErrorCode
 from ...api.v1.ai import _increment_daily_stat
-from ...services.ai.deepseek import DeepSeekAdapter, TOKEN_USAGE_SIGNAL
+from ...services.ai.adapters import get_adapter, TOKEN_USAGE_SIGNAL
 from ...services.audit import audit_content
 from ...services.cache import (
     get_cached_character, set_cached_character, invalidate_character,
@@ -22,6 +22,7 @@ from ...services.cache import (
 )
 from ...services.chat.character_prompt_builder import build_character_system_prompt
 from ...services.credit import deduct, get_balance
+from ...utils.writing_style import resolve_status_schema
 
 character_bp = Blueprint("character", __name__)
 
@@ -30,7 +31,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024
 
 _CHAR_SELECT = (
     "id, user_id, name, `desc`, avatar, author, language, category, tags, "
-    "persona_content, is_public, like_count, view_count, collect_count, "
+    "persona_content, status_schema, is_public, like_count, view_count, collect_count, "
     "use_count, create_time"
 )
 
@@ -217,8 +218,8 @@ def create_character():
     character_id = execute(
         "INSERT INTO t_character_card "
         "(user_id, name, `desc`, avatar, author, language, category, tags, "
-        "persona_content, is_public) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        "persona_content, status_schema, is_public) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         (
             user_id, name,
             payload.get("desc", "").strip(),
@@ -228,6 +229,7 @@ def create_character():
             payload.get("category", 0),
             json.dumps(payload.get("tags", []), ensure_ascii=False),
             payload.get("personaContent", "").strip(),
+            json.dumps(payload.get("statusSchema"), ensure_ascii=False) if payload.get("statusSchema") else None,
             payload.get("isPublic", 1),
         ),
     )
@@ -264,6 +266,11 @@ def update_character(character_id: int):
     if "tags" in payload:
         updates["tags"] = "%s"
         values.append(json.dumps(payload["tags"], ensure_ascii=False))
+
+    if "statusSchema" in payload:
+        updates["status_schema"] = "%s"
+        schema_val = payload["statusSchema"]
+        values.append(json.dumps(schema_val, ensure_ascii=False) if schema_val else None)
 
     if not updates:
         raise AppError(ErrorCode.PARAM_INVALID, "没有需要修改的内容")
@@ -422,6 +429,18 @@ def get_character_chat_config(character_id: int):
     persona_content = character.get("persona_content", "")
     system_prompt = build_character_system_prompt(persona_content) if persona_content else ""
 
+    # Resolve status schema
+    status_schema_raw = character.get("status_schema")
+    status_schema = None
+    if isinstance(status_schema_raw, str):
+        try:
+            status_schema = json.loads(status_schema_raw)
+        except (json.JSONDecodeError, TypeError):
+            status_schema = None
+    elif isinstance(status_schema_raw, list):
+        status_schema = status_schema_raw
+    resolved_schema = resolve_status_schema("normal", status_schema)
+
     return success_response({
         "id": character["id"],
         "name": character["name"],
@@ -431,6 +450,7 @@ def get_character_chat_config(character_id: int):
         "tags": _parse_tags(character.get("tags")),
         "systemPrompt": system_prompt,
         "personaContent": persona_content,
+        "statusSchema": resolved_schema,
         "useCount": character.get("use_count", 0),
     })
 
@@ -484,7 +504,8 @@ def character_chat_stream(character_id: int):
     if not audit_input["passed"]:
         raise AppError(ErrorCode.PARAM_INVALID, audit_input["message"])
 
-    service = DeepSeekAdapter()
+    provider = payload.get("aiProvider") or "deepseek"
+    service = get_adapter(provider)
     _chat_ensure_credits(user_id)
 
     full_response = []
@@ -520,6 +541,15 @@ def character_chat_stream(character_id: int):
                 _chat_check_and_deduct(user_id, stream_tokens, conversation_id=conversation_id)
             except AppError:
                 pass
+
+        # Guard: if AI omitted 【角色状态栏】, inject minimal fallback
+        full_text = "".join(full_response)
+        if "【角色状态栏】" not in full_text:
+            guard = "\n\n【角色状态栏】\n服装：—\n表情：—\n想法：—\n"
+            full_response.append(guard)
+            for chunk in [guard]:
+                escaped = "\ndata: ".join(chunk.split("\n"))
+                yield f"data: {escaped}\n\n"
 
         yield "data: [DONE]\n\n"
 

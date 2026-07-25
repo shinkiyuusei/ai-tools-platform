@@ -334,5 +334,37 @@ p {
   min-height: 200px;
 }
 
+/* --- World Info / Lore sidebar card --- */
+.sb-lore .lore-entry {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.sb-lore .lore-entry:last-child {
+  border-bottom: none;
+}
+.lore-keys {
+  margin-bottom: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.lore-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: var(--text-xs);
+  background: rgba(123, 156, 191, 0.15);
+  color: var(--color-misty-blue);
+  border-radius: var(--radius-sm);
+}
+.lore-content {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: var(--leading-snug);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* --- Responsive Breakpoints Reference --- */
 /* sm: 640px | md: 768px | lg: 1024px | xl: 1280px | 2xl: 1536px */

@@ -1,0 +1,5 @@
+/* Example Extension — injects a custom color accent via the global.theme hook */
+
+:root {
+  --ext-example-accent: #f0a060;
+}

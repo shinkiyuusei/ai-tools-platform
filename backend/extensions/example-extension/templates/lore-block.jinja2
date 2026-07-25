@@ -1,0 +1,7 @@
+{# Example Jinja2 template for World Info lore overrides #}
+{% if lore_block %}
+# 扩展注入 — 自定义设定层
+以下设定来自于扩展，与主角设定保持一致的优先级：
+{{ lore_block }}
+
+{% endif %}

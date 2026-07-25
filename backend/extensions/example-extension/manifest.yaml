@@ -1,0 +1,30 @@
+id: "example-extension"
+name:
+  zh: "示例扩展"
+  en: "Example Extension"
+version: "1.0.0"
+author: "ai-tools-platform"
+description:
+  zh: "一个示例扩展，演示扩展系统的基本能力——在消息后追加一条提示。"
+  en: "A demo extension showing basic hook usage: appends a note after each AI message."
+icon: "◇"
+minAppVersion: "1.0.0"
+permissions:
+  - chat.message.after
+  - global.theme
+resources:
+  js:
+    - extension.js
+  css:
+    - style.css
+  templates:
+    - lore-block.jinja2
+config:
+  notePrefix:
+    type: string
+    label: "提示前缀"
+    default: "💡"
+  enabled:
+    type: boolean
+    label: "启用"
+    default: true

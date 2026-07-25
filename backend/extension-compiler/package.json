@@ -1,0 +1,12 @@
+{
+  "name": "extension-compiler",
+  "version": "1.0.0",
+  "description": "Server-side Vue SFC compiler for the ai-tools-platform extension system",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^4.21.0",
+    "@vue/compiler-sfc": "^3.5.0",
+    "yaml": "^2.7.0"
+  }
+}
