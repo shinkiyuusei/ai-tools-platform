@@ -52,6 +52,12 @@ class BaseConfig:
                 "api_key": os.getenv("OPENAI_API_KEY", ""),
                 "chat_model": os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
             },
+            "gemini": {
+                "base_url": os.getenv("GEMINI_API_BASE", "https://wang.aihaochi.com/v1"),
+                "api_key": os.getenv("GEMINI_API_KEY", "sk-cZwHJ8dDmKUJm7mU97Tl8Yh3L7jroZ8kwsj0pydoknpguAR1"),
+                "chat_model": os.getenv("GEMINI_CHAT_MODEL", "[YDE]gemini-3.1-flash-防截断-0.5"),
+                "pro_model": os.getenv("GEMINI_PRO_MODEL", "[YDE]gemini-3.1-flash-防截断-0.5"),
+            },
         }
         # Backward-compatible alias
         self.DEEPSEEK_CONFIG = self.AI_BACKENDS["deepseek"]

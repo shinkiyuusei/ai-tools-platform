@@ -1,13 +1,14 @@
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { chatApi, conversationApi } from '../api/chat'
+import { chatApi } from '../api/chat'
 import { worldInfoApi } from '../api/worldInfo'
 import { useAuthStore } from '../stores/auth'
 import AppLayout from '../layouts/AppLayout.vue'
 import { formatTokens } from '../utils/format'
 import { parseImmersiveContent, extractStatusSection } from '../utils/messageRenderer'
 import StatusPanel from '../components/StatusPanel.vue'
+import { useChatSession } from '../composables/useChatSession'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -15,23 +16,53 @@ const workId = Number(route.params.workId)
 
 const work = ref(null)
 const loading = ref(true)
-const messages = ref([])
-const inputText = ref('')
-const sending = ref(false)
-const selectedModel = ref('deepseek-v4-flash')
-const thinkingMode = ref(false)
-const aiProvider = ref('deepseek')
 const activeLoreEntries = ref([])
-const activeStream = ref(null)
-const currentConversationId = ref(null)
-const conversationList = ref([])
-const loadingHistory = ref(false)
 const sceneContext = ref(null)
 const selectedPerspectiveKey = ref('')
 const perspectiveOptions = ref([])
 const switchingPerspective = ref(false)
 const favorited = ref(false)
 const statusSchema = ref([])
+
+// ---- Shared chat session (providers, conversations, streaming) ----
+const {
+  messages,
+  inputText,
+  sending,
+  selectedModel,
+  thinkingMode,
+  aiProvider,
+  activeStream,
+  currentConversationId,
+  conversationList,
+  loadingHistory,
+  providers,
+  models,
+  selectProvider,
+  scrollToBottom,
+  ensureConversation,
+  loadConversationList,
+  loadConversation,
+  newConversation,
+  deleteConversation,
+  saveMessages,
+  appendUserMessage,
+  appendAssistantMessage,
+  stopStream,
+} = useChatSession({
+  entityType: 'work',
+  entityId: workId,
+  scrollSelector: '.chat-messages',
+  mapMessage: (m) => ({
+    role: m.role,
+    content: m.content,
+    _saved: true,
+    choices: m.role === 'assistant' ? parseChoices(m.content) : [],
+  }),
+  onReset: () => {
+    sceneContext.value = null
+  },
+})
 
 // ---- Opening tooltip ----
 const tooltipText = ref('')
@@ -73,75 +104,6 @@ const toggleFavorite = async () => {
     favorited.value = res.data.collected
   } catch {
     // silently fail
-  }
-}
-
-const models = [
-  { key: 'deepseek-v4-flash', label: 'DeepSeek Flash' },
-  { key: 'deepseek-v4-pro', label: 'DeepSeek Pro' },
-]
-
-const ensureConversation = async () => {
-  if (currentConversationId.value) return
-  try {
-    const res = await conversationApi.create(workId, 'work', '')
-    currentConversationId.value = res.data.id
-    loadConversationList()
-  } catch (e) {
-    console.error('Failed to create conversation:', e)
-  }
-}
-
-const saveMessages = async () => {
-  const cid = currentConversationId.value
-  if (!cid) return
-  const unsaved = messages.value.filter(
-    (m) => !m.streaming && !m._saved && m.content
-  )
-  if (!unsaved.length) return
-  try {
-    await conversationApi.addMessages(
-      cid,
-      unsaved.map((m) => ({ role: m.role, content: m.content })),
-    )
-    unsaved.forEach((m) => (m._saved = true))
-  } catch (e) {
-    console.error('Failed to save messages:', e)
-  }
-}
-
-const loadConversationList = async () => {
-  try {
-    const res = await conversationApi.list(workId, 'work', 1, 20)
-    conversationList.value = res.data.list || []
-  } catch (e) {
-    console.error('Failed to load conversations:', e)
-  }
-}
-
-const loadConversation = async (convId) => {
-  if (activeStream.value) {
-    activeStream.value.cancel()
-    activeStream.value = null
-  }
-  loadingHistory.value = true
-  try {
-    const res = await conversationApi.getDetail(convId)
-    const conv = res.data
-    if (!conv || !conv.messages) return
-    currentConversationId.value = conv.id
-    messages.value = conv.messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-      _saved: true,
-      choices: m.role === 'assistant' ? parseChoices(m.content) : [],
-    }))
-    sending.value = false
-    nextTick(() => scrollToBottom())
-  } catch (e) {
-    console.error('Failed to load conversation:', e)
-  } finally {
-    loadingHistory.value = false
   }
 }
 
@@ -189,12 +151,8 @@ const buildPerspectiveOptions = () => {
 }
 
 const onPerspectiveChange = async () => {
-  if (activeStream.value) {
-    activeStream.value.cancel()
-    activeStream.value = null
-  }
+  stopStream()
   messages.value = []
-  sending.value = false
   currentConversationId.value = null
   sceneContext.value = null
   inputText.value = ''
@@ -210,10 +168,10 @@ const onPerspectiveChange = async () => {
   }
 }
 
+
 const doStreamSend = (msgList) => {
   const sys = work.value?.systemPrompt || ''
-  messages.value.push({ role: 'assistant', content: '', streaming: true })
-  const rxMsg = messages.value[messages.value.length - 1]
+  const rxMsg = appendAssistantMessage({ streaming: true })
   sending.value = true
 
   const stream = chatApi.sendMessageStream({
@@ -256,43 +214,24 @@ const doStreamSend = (msgList) => {
   activeStream.value = stream
 }
 
+
 const sendMessage = async () => {
   const text = inputText.value.trim()
   if (!text || sending.value) return
 
-  messages.value.push({ role: 'user', content: text })
-  inputText.value = ''
-  nextTick(() => scrollToBottom())
-
+  appendUserMessage(text)
   await ensureConversation()
-
   doStreamSend(messages.value)
 }
 
 const useOpening = async (text) => {
   if (!text || sending.value) return
   hideTooltip()
-  messages.value.push({ role: 'user', content: text })
-  nextTick(() => scrollToBottom())
+  appendUserMessage(text)
   await ensureConversation()
   doStreamSend(messages.value)
 }
 
-const newConversation = () => {
-  if (activeStream.value) {
-    activeStream.value.cancel()
-    activeStream.value = null
-  }
-  messages.value = []
-  sending.value = false
-  currentConversationId.value = null
-  sceneContext.value = null
-}
-
-const scrollToBottom = () => {
-  const el = document.querySelector('.chat-messages')
-  if (el) el.scrollTop = el.scrollHeight
-}
 
 const extractSceneContext = (content) => {
   if (!content) return null
@@ -318,6 +257,7 @@ const findChoiceIndex = (content) => {
   return m ? m.index : -1
 }
 
+
 const parseChoices = (content) => {
   const idx = findChoiceIndex(content)
   if (idx === -1) return []
@@ -327,7 +267,7 @@ const parseChoices = (content) => {
     .filter((l) => /^[A-E][.、)]/.test(l.trim()))
     .map((l) => l.trim())
   if (choices.length === 1) {
-    // Handle single-line format: "A. xxx / B. xxx / C. xxx / D. xxx"
+    // Handle single-line format: 'A. xxx / B. xxx / C. xxx / D. xxx'
     const split = choices[0].split(/\s*\/\s*(?=[A-E][.、)])/g)
     if (split.length > 1) return split.map((s) => s.trim()).filter(Boolean)
   }
@@ -338,6 +278,7 @@ const stripChoices = (content) => {
   const idx = findChoiceIndex(content)
   return idx >= 0 ? content.slice(0, idx).trimEnd() : content
 }
+
 
 const displayContent = (content) => {
   // strip choice section first (existing logic)
@@ -365,18 +306,6 @@ const handleKeydown = (e) => {
   }
 }
 
-const deleteConversation = async (convId) => {
-  try {
-    await conversationApi.remove(convId)
-    conversationList.value = conversationList.value.filter((c) => c.id !== convId)
-    if (currentConversationId.value === convId) {
-      newConversation()
-    }
-  } catch (e) {
-    console.error('Failed to delete conversation:', e)
-  }
-}
-
 onMounted(async () => {
   await loadWork()
   checkFavoriteStatus()
@@ -389,6 +318,7 @@ onMounted(async () => {
   }
   loading.value = false
 })
+
 </script>
 
 <template>
@@ -401,6 +331,9 @@ onMounted(async () => {
         <div class="chat-header">
           <span class="header-name">{{ work.name }}</span>
           <div class="header-actions">
+            <select v-model="aiProvider" class="provider-select" @change="selectProvider($event.target.value)">
+              <option v-for="p in providers" :key="p.key" :value="p.key">{{ p.label }}</option>
+            </select>
             <select v-model="selectedModel" class="model-select">
               <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>
             </select>
@@ -640,6 +573,17 @@ onMounted(async () => {
   color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
+}
+
+.provider-select {
+  padding: 5px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-misty-blue-deep);
+  border-radius: var(--radius-sm);
+  color: var(--color-misty-blue-soft);
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
 }
 
 .perspective-select {

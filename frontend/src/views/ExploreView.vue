@@ -100,7 +100,6 @@ const fetchList = async () => {
     if (categoryId.value) params.categoryId = categoryId.value
 
     if (activeChannelTab.value === 'cards') {
-      // Character cards channel
       const sortMap = { hot: 'hot', new: 'new', old: 'new' }
       const charParams = {
         keyword: params.keyword,
@@ -146,7 +145,6 @@ const fetchList = async () => {
       listData.value.pageNum = response.data.pageNum
       listData.value.pageSize = response.data.pageSize
     } else {
-      // Tools/works channel
       const response = await chatApi.getWorks(params)
       listData.value.list = response.data.list.map(item => ({ ...item, _type: 'work' }))
       listData.value.total = response.data.total
@@ -216,12 +214,11 @@ const fetchRecommend = async () => {
 const changeSort = (val) => {
   sortType.value = val
   pageNum.value = 1
-  activeCategoryTab.value = null  // exit recommend/category mode, use default ranking
+  activeCategoryTab.value = null
   fetchList()
 }
 
 const handleSearch = () => {
-  // Exit recommend / category tab mode so pagination & sorting respect the keyword
   if (activeCategoryTab.value === 'recommend' || activeCategoryTab.value === 'category') {
     activeCategoryTab.value = null
   }
@@ -238,7 +235,6 @@ const handlePageChange = (page) => {
   }
 }
 
-// ---- Category tab click --------------------------------------------
 const onCategoryTabClick = (tab) => {
   activeCategoryTab.value = tab.key
   pageNum.value = 1
@@ -254,16 +250,14 @@ const onCategoryTabClick = (tab) => {
   }
 }
 
-// ---- Ranking tab click ---------------------------------------------
 const onRankingTabClick = (tab) => {
   activeRankingTab.value = tab.key
   rankType.value = tab.key
-  activeCategoryTab.value = null  // exit recommend/category mode
+  activeCategoryTab.value = null
   pageNum.value = 1
   fetchList()
 }
 
-// ---- Helpers --------------------------------------------------------
 const getCategoryColor = (catId) => {
   const cat = categories.value.find(c => c.id === catId)
   return cat ? cat.color : 'misty'
@@ -276,6 +270,11 @@ const getCategoryName = (catId) => {
 
 const getTabLabel = (labelKey) => {
   return t(labelKey)
+}
+
+// 荣誉徽章 tooltip 文案
+const honorTooltip = (tier) => {
+  return { gold: '金牌作品 — 百万级热度', silver: '银牌作品 — 十万级热度', bronze: '铜牌作品 — 万级热度' }[tier] || ''
 }
 
 // ---- Watchers -------------------------------------------------------
@@ -323,7 +322,7 @@ onMounted(() => {
         <button class="action-btn ghost" type="button">{{ t('discovery.random') }}</button>
       </div>
 
-      <!-- Category grid (shown when "分区" tab is active and no category selected) -->
+      <!-- Category grid -->
       <div v-if="activeCategoryTab === 'category' && !categoryId" class="category-section">
         <div v-if="categoryLoading" class="skeleton-grid">
           <div v-for="n in 5" :key="n" class="skeleton-card"></div>
@@ -335,13 +334,14 @@ onMounted(() => {
             :class="['category-card', `category-card--${cat.color}`]"
             @click="selectCategory(cat)"
           >
+            <span class="category-icon">{{ cat.icon || '◇' }}</span>
             <span class="category-name">{{ cat.name }}</span>
-            <span class="category-count">{{ cat.count }}</span>
+            <span class="category-count">{{ cat.count }} 作品</span>
           </button>
         </div>
       </div>
 
-      <!-- Category breadcrumb (shown when a category is selected from category tab) -->
+      <!-- Category breadcrumb -->
       <div v-if="activeCategoryTab === 'category' && categoryId" class="category-breadcrumb">
         <span class="breadcrumb-link" @click="clearCategory">{{ t('discovery.category_section') }}</span>
         <span class="breadcrumb-sep">&rsaquo;</span>
@@ -376,21 +376,36 @@ onMounted(() => {
             item._type === 'character' ? 'card--character' : 'card--tool'
           ]"
         >
+          <!-- 顶部炫彩条 -->
           <div class="card-accent" :class="`accent--${getCategoryColor(item.categoryId)}`"></div>
+
+          <!-- 封面 -->
           <div :class="item._type === 'character' ? 'cover-wrap cover-wrap--char' : 'cover-wrap'">
             <div :class="item._type === 'character' ? 'tool-cover tool-cover--char' : 'tool-cover'">
               <img v-if="item.icon" :src="item.icon" :alt="item.name" class="cover-img" />
               <span v-else class="cover-text">{{ item.name.slice(0, 2) }}</span>
             </div>
-            <span class="hot-badge">{{ formatTokens(item.useCount) }}</span>
-            <span v-if="item.honorTier" :class="['honor-badge', `honor--${item.honorTier}`]">
-              {{ { gold: '金', silver: '银', bronze: '铜' }[item.honorTier] }}
-            </span>
+            <!-- 封面渐变遮罩 -->
+            <div class="cover-gradient"></div>
+
+            <!-- 热度角标 -->
+            <span class="hot-badge">🔥 {{ formatTokens(item.useCount) }}</span>
+
+            <!-- 荣誉角标 -->
+            <BaseTooltip v-if="item.honorTier" :text="honorTooltip(item.honorTier)">
+              <span :class="['honor-badge', `honor--${item.honorTier}`]">
+                {{ { gold: '👑 金', silver: '🥈 银', bronze: '🥉 铜' }[item.honorTier] }}
+              </span>
+            </BaseTooltip>
+
+            <!-- 收藏数 -->
             <div class="rating-overlay">
               <span class="favorite-heart">♥</span>
               <span class="favorite-count">{{ formatHot(item.favoritesCount) }}</span>
             </div>
           </div>
+
+          <!-- 卡片内容 -->
           <div class="card-body">
             <BaseTooltip :text="item.name">
               <h3 class="card-title">{{ item.name }}</h3>
@@ -398,12 +413,19 @@ onMounted(() => {
             <BaseTooltip :text="item.desc">
               <p class="card-desc">{{ item.desc }}</p>
             </BaseTooltip>
+
+            <!-- 标签 -->
+            <div v-if="item.tags && item.tags.length > 0" class="card-tags">
+              <span v-for="tag in item.tags.slice(0, 3)" :key="tag.id" class="card-tag">{{ tag.name }}</span>
+            </div>
+
             <div class="card-meta">
               <span>{{ t('discovery.platform_created') }}</span>
               <span :class="item.isFree ? 'tag-free' : 'tag-vip'">
                 {{ item.isFree ? t('discovery.free') : t('discovery.vip') }}
               </span>
             </div>
+
             <div v-if="item._type === 'character'" class="card-footer card-footer-char">
               <span class="char-stat">♥ {{ formatHot(item.likeCount) }}</span>
               <span class="char-stat">☆ {{ formatHot(item.collectCount) }}</span>
@@ -577,6 +599,7 @@ onMounted(() => {
   gap: var(--space-lg);
 }
 
+/* --- Card --- */
 .tool-card {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
@@ -586,38 +609,44 @@ onMounted(() => {
   text-decoration: none;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .tool-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-xl);
   border-color: var(--border-primary);
 }
 
 .card--crimson:hover {
-  box-shadow: var(--shadow-glow-crimson);
-  border-color: rgba(200, 85, 84, 0.3);
+  box-shadow: var(--shadow-glow-crimson), var(--shadow-lg);
+  border-color: rgba(200, 85, 84, 0.4);
 }
 
 .card--candy:hover {
-  box-shadow: var(--shadow-glow-pink);
-  border-color: rgba(238, 162, 180, 0.3);
+  box-shadow: var(--shadow-glow-pink), var(--shadow-lg);
+  border-color: rgba(238, 162, 180, 0.4);
 }
 
 .card--misty:hover {
-  box-shadow: var(--shadow-glow-misty);
-  border-color: rgba(123, 156, 191, 0.3);
+  box-shadow: var(--shadow-glow-misty), var(--shadow-lg);
+  border-color: rgba(123, 156, 191, 0.4);
+}
+
+.card--green:hover {
+  box-shadow: 0 0 20px rgba(61, 107, 86, 0.2), var(--shadow-lg);
+  border-color: rgba(61, 107, 86, 0.4);
 }
 
 /* --- Character Card Specific --- */
 .card--character {
-  background: linear-gradient(180deg, rgba(238, 162, 180, 0.04) 0%, var(--bg-card) 40%);
-  border-color: rgba(238, 162, 180, 0.12);
+  background: linear-gradient(180deg, rgba(238, 162, 180, 0.06) 0%, var(--bg-card) 35%);
+  border-color: rgba(238, 162, 180, 0.15);
 }
 
 .card--character:hover {
-  border-color: rgba(238, 162, 180, 0.3);
-  box-shadow: var(--shadow-glow-pink);
+  border-color: rgba(238, 162, 180, 0.4);
+  box-shadow: var(--shadow-glow-pink), var(--shadow-lg);
 }
 
 .cover-wrap--char {
@@ -626,7 +655,7 @@ onMounted(() => {
 
 .tool-cover--char {
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  background: linear-gradient(135deg, rgba(238, 162, 180, 0.1), rgba(200, 85, 84, 0.06));
+  background: linear-gradient(135deg, rgba(238, 162, 180, 0.12), rgba(200, 85, 84, 0.08));
 }
 
 /* --- Cover --- */
@@ -634,6 +663,16 @@ onMounted(() => {
   position: relative;
   aspect-ratio: 4/3;
   overflow: hidden;
+}
+
+.cover-gradient {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.5));
+  pointer-events: none;
 }
 
 .tool-cover {
@@ -649,6 +688,11 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.tool-card:hover .cover-img {
+  transform: scale(1.05);
 }
 
 .cover-text {
@@ -658,24 +702,81 @@ onMounted(() => {
   opacity: 0.3;
 }
 
+/* --- Hot Badge --- */
 .hot-badge {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  background: rgba(0, 0, 0, 0.6);
-  color: var(--color-candy-pink-soft);
-  font-size: var(--text-xs);
-  padding: 2px 8px;
+  top: 10px;
+  left: 10px;
+  background: linear-gradient(135deg, rgba(200, 85, 84, 0.88), rgba(238, 162, 180, 0.72));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
   border-radius: var(--radius-sm);
+  letter-spacing: 0.02em;
+  z-index: 1;
+  box-shadow: 0 2px 6px rgba(200, 85, 84, 0.25);
 }
 
-.like-badge {
+/* --- Honor Badge --- */
+.honor-badge {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  right: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  z-index: 1;
+  letter-spacing: 0.05em;
+  backdrop-filter: blur(4px);
+  cursor: default;
+}
+
+.honor--gold {
+  background: rgba(255, 193, 7, 0.18);
+  color: #ffd54f;
+  border-color: rgba(255, 193, 7, 0.5);
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.12);
+}
+
+.honor--silver {
+  background: rgba(192, 192, 192, 0.14);
+  color: #e0e0e0;
+  border-color: rgba(192, 192, 192, 0.35);
+}
+
+.honor--bronze {
+  background: rgba(205, 127, 50, 0.14);
+  color: #dea060;
+  border-color: rgba(205, 127, 50, 0.35);
+}
+
+/* --- Rating Overlay --- */
+.rating-overlay {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 1;
+}
+
+.favorite-heart {
   color: var(--color-crimson-soft);
-  font-size: 16px;
-  opacity: 0.8;
+  font-size: 11px;
+}
+
+.favorite-count {
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /* --- Card Body --- */
@@ -695,6 +796,7 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 
 .card-desc {
@@ -703,6 +805,25 @@ onMounted(() => {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+/* --- Tags --- */
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.card-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  font-size: 10px;
+  background: rgba(123, 156, 191, 0.1);
+  color: var(--color-misty-blue-soft);
+  border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 
@@ -731,23 +852,6 @@ onMounted(() => {
   border-top: 1px solid var(--border-card);
 }
 
-.score {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.score-star {
-  color: var(--color-candy-pink);
-  font-size: var(--text-xs);
-}
-
-.score-value {
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
 .update-badge {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
@@ -761,6 +865,33 @@ onMounted(() => {
 .char-stat {
   font-size: var(--text-xs);
   color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* --- Card Accent Strip --- */
+.card-accent {
+  height: 3px;
+  width: 100%;
+}
+
+.accent--crimson {
+  background: linear-gradient(90deg, var(--color-crimson-deep), var(--color-crimson), var(--color-candy-pink));
+}
+
+.accent--candy {
+  background: linear-gradient(90deg, var(--color-candy-pink-deep), var(--color-candy-pink));
+}
+
+.accent--misty {
+  background: linear-gradient(90deg, var(--color-misty-blue-deep), var(--color-misty-blue), var(--color-misty-blue-soft));
+}
+
+.accent--green {
+  background: linear-gradient(90deg, var(--color-dark-green-deep), var(--color-dark-green));
+}
+
+.accent--silver {
+  background: linear-gradient(90deg, var(--color-silver-gray-deep), var(--color-silver-gray));
 }
 
 /* --- Empty --- */
@@ -786,81 +917,6 @@ onMounted(() => {
   color: var(--text-tertiary);
 }
 
-/* --- Card Accent Strip --- */
-.card-accent {
-  height: 3px;
-  width: 100%;
-}
-.accent--crimson { background: var(--color-crimson); }
-.accent--candy { background: var(--color-candy-pink); }
-.accent--misty { background: var(--color-misty-blue); }
-.accent--green { background: var(--color-dark-green); }
-.accent--silver { background: var(--color-silver-gray); }
-
-/* --- Honor Badge --- */
-.honor-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  border: 1px solid;
-  z-index: 1;
-}
-.honor--gold {
-  background: rgba(255, 193, 7, 0.15);
-  color: #ffc107;
-  border-color: rgba(255, 193, 7, 0.4);
-}
-.honor--silver {
-  background: rgba(192, 192, 192, 0.12);
-  color: #c0c0c0;
-  border-color: rgba(192, 192, 192, 0.3);
-}
-.honor--bronze {
-  background: rgba(205, 127, 50, 0.12);
-  color: #cd7f32;
-  border-color: rgba(205, 127, 50, 0.3);
-}
-
-/* --- Rating Overlay --- */
-.rating-overlay {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  background: rgba(0, 0, 0, 0.65);
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-.favorite-heart {
-  color: var(--color-crimson-soft);
-  font-size: var(--text-xs);
-}
-.favorite-count {
-  color: var(--text-primary);
-  font-size: var(--text-xs);
-  font-weight: 700;
-}
-
-/* --- Enhanced Hot Badge --- */
-.hot-badge {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  background: linear-gradient(135deg, rgba(200, 85, 84, 0.85), rgba(238, 162, 180, 0.65));
-  color: #fff;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  letter-spacing: 0.02em;
-}
-
 /* --- Category Grid --- */
 .category-section {
   margin-bottom: var(--space-md);
@@ -877,7 +933,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-xs);
+  gap: 4px;
   padding: var(--space-lg) var(--space-md);
   border-radius: var(--radius-md);
   background: var(--bg-card);
@@ -887,7 +943,7 @@ onMounted(() => {
 }
 
 .category-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
 }
 
 .category-card--crimson:hover { border-color: var(--color-crimson); box-shadow: var(--shadow-glow-crimson); }
@@ -895,6 +951,11 @@ onMounted(() => {
 .category-card--misty:hover { border-color: var(--color-misty-blue); box-shadow: var(--shadow-glow-misty); }
 .category-card--green:hover { border-color: var(--color-dark-green); }
 .category-card--silver:hover { border-color: var(--color-silver-gray); }
+
+.category-icon {
+  font-size: 22px;
+  opacity: 0.7;
+}
 
 .category-name {
   font-size: var(--text-base);

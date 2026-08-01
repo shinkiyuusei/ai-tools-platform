@@ -23,8 +23,8 @@ import ExtensionMarketplaceView from '../views/ExtensionMarketplaceView.vue'
 
 const routes = [
   { path: '/', redirect: '/explore' },
-  { path: '/create', name: 'home', component: HomeView },
   { path: '/explore', name: 'explore', component: ExploreView },
+  { path: '/create', name: 'home', component: HomeView },
   { path: '/chat/:workId', name: 'chat', component: ChatView },
   { path: '/chat/character/:id', name: 'character-chat', component: CharacterChatView },
   { path: '/character/:id', name: 'character-detail', component: CharacterDetailView },
@@ -46,9 +46,20 @@ const routes = [
   { path: '/:pathMatch(.*)*', name: 'not-found', component: ErrorView, props: { code: 404 } },
 ]
 
+// 支持 URL 前缀语言：/zh/, /en/, /ja/, /ko/
+const LOCALES = ['zh', 'en', 'ja', 'ko']
+
 const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes: [
+    // Locale-prefixed routes
+    {
+      path: '/:locale',
+      children: routes,
+    },
+    // Non-prefixed routes (defaults to stored or zh)
+    ...routes,
+  ],
 })
 
 function isAdmin() {
@@ -64,6 +75,11 @@ function isAdmin() {
 router.beforeEach(async (to) => {
   const userInfo = localStorage.getItem('userInfo')
   const hasUser = !!userInfo
+
+  // Sync locale from URL if present
+  if (to.params.locale && LOCALES.includes(to.params.locale)) {
+    localStorage.setItem('userLanguage', to.params.locale)
+  }
 
   if (to.meta.requiresAuth && !hasUser) {
     return { name: 'login', query: { redirect: to.fullPath } }

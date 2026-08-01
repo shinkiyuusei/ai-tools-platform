@@ -3,10 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
+import { useToastStore } from '../stores/toast'
 import RechargeModal from '../components/RechargeModal.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const auth = useAuthStore()
+const toast = useToastStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -15,13 +17,13 @@ const showRechargeModal = ref(false)
 const isAdmin = computed(() => (auth.userInfo?.vipLevel || 0) >= 2)
 
 const menuList = [
-  { to: '/explore',       label: '发现',     desc: '发现故事', icon: '◇', color: 'misty' },
-  { to: '/create',        label: '创作',     desc: 'AI 写作',  icon: '◇', color: 'crimson' },
-  { to: '/usercenter',    label: '我的',     desc: '个人中心', icon: '◇', color: 'green' },
-  { to: '/my-characters', label: '我的角色', desc: '管理角色卡', icon: '◇', color: 'candy' },
-  { to: '/my-works',      label: '我的作品', desc: '管理作品卡', icon: '◇', color: 'misty' },
+  { to: '/explore',       label: '发现',     desc: '发现故事', icon: '◈', color: 'misty' },
+  { to: '/create',        label: '创作',     desc: 'AI 写作',  icon: '✦', color: 'crimson' },
+  { to: '/usercenter',    label: '我的',     desc: '个人中心', icon: '◉', color: 'green' },
+  { to: '/my-characters', label: '我的角色', desc: '管理角色卡', icon: '◈', color: 'candy' },
+  { to: '/my-works',      label: '我的作品', desc: '管理作品卡', icon: '◈', color: 'misty' },
   { to: '/favorites',     label: '我的收藏', desc: '收藏作品', icon: '♥', color: 'crimson' },
-  { to: '/extensions',    label: '扩展',     desc: '扩展市场', icon: '◇', color: 'gold' },
+  { to: '/extensions',    label: '扩展',     desc: '扩展市场', icon: '⬡', color: 'gold' },
 ]
 
 const adminMenuList = [
@@ -32,31 +34,10 @@ const adminMenuList = [
   { to: '/admin/extensions', label: '扩展管理', icon: '▣', color: 'gold' },
 ]
 
-const errorMessage = ref('')
-const successMessage = ref('')
 const sidebarCollapsed = ref(false)
 
 const isActive = (path) => {
   return route.path.startsWith(path)
-}
-
-const handleError = (event) => {
-  errorMessage.value = event.detail
-  window.setTimeout(() => {
-    errorMessage.value = ''
-  }, 3000)
-}
-
-const handleSuccess = (event) => {
-  successMessage.value = event.detail
-  window.setTimeout(() => {
-    successMessage.value = ''
-  }, 2000)
-}
-
-const handleLogout = () => {
-  auth.logout()
-  router.push('/explore')
 }
 
 const handleAuthExpired = () => {
@@ -64,15 +45,64 @@ const handleAuthExpired = () => {
   router.push('/login')
 }
 
+const handleLogout = () => {
+  auth.logout()
+  router.push('/explore')
+}
+
+// ---- i18n ----
+const localeOptions = [
+  { key: 'zh', label: '中' },
+  { key: 'en', label: 'EN' },
+  { key: 'ja', label: '日' },
+  { key: 'ko', label: '한' },
+]
+
+const switchLocale = (key) => {
+  locale.value = key
+  localStorage.setItem('userLanguage', key)
+}
+
+// ---- Theme ----
+const currentTheme = ref(localStorage.getItem('userTheme') || 'dark')
+
+const applyTheme = (theme) => {
+  currentTheme.value = theme
+  localStorage.setItem('userTheme', theme)
+  const root = document.documentElement
+  if (theme === 'light') {
+    root.classList.add('light')
+  } else if (theme === 'system') {
+    const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
+    root.classList.toggle('light', prefersLight)
+  } else {
+    root.classList.remove('light')
+  }
+}
+
+const cycleTheme = () => {
+  const themes = ['dark', 'light', 'system']
+  const idx = themes.indexOf(currentTheme.value)
+  const next = themes[(idx + 1) % themes.length]
+  applyTheme(next)
+}
+
+const themeIcon = computed(() => {
+  return { dark: '☾', light: '☀', system: '◐' }[currentTheme.value] || '☾'
+})
+
 onMounted(() => {
-  window.addEventListener('app:error', handleError)
-  window.addEventListener('app:success', handleSuccess)
+  applyTheme(currentTheme.value)
+
   window.addEventListener('app:auth-expired', handleAuthExpired)
+
+  // 监听系统主题变化
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+    if (currentTheme.value === 'system') applyTheme('system')
+  })
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('app:error', handleError)
-  window.removeEventListener('app:success', handleSuccess)
   window.removeEventListener('app:auth-expired', handleAuthExpired)
 })
 </script>
@@ -95,11 +125,30 @@ onBeforeUnmount(() => {
           </RouterLink>
         </nav>
 
-        <div class="top-nav-user">
+        <div class="top-nav-right">
+          <!-- 语言切换 -->
+          <div class="locale-switcher">
+            <button
+              v-for="opt in localeOptions"
+              :key="opt.key"
+              :class="['locale-btn', { active: locale === opt.key }]"
+              @click="switchLocale(opt.key)"
+            >{{ opt.label }}</button>
+          </div>
+
+          <!-- 主题切换 -->
+          <button class="theme-btn" :title="currentTheme" @click="cycleTheme">
+            {{ themeIcon }}
+          </button>
+
           <template v-if="auth.isLoggedIn()">
-            <span class="user-points" @click="showRechargeModal = true" title="点击充值积分">积分:{{ auth.userInfo?.credits ?? 0 }}</span>
+            <span class="user-points" @click="showRechargeModal = true" title="点击充值积分">
+              积分:{{ auth.userInfo?.credits ?? 0 }}
+            </span>
             <div class="user-avatar-mini">{{ auth.userInfo?.nickname?.charAt(0) || 'U' }}</div>
-            <RouterLink to="/usercenter" class="user-name-link">{{ auth.userInfo?.nickname || '用户' }}</RouterLink>
+            <RouterLink to="/usercenter" class="user-name-link">
+              {{ auth.userInfo?.nickname || '用户' }}
+            </RouterLink>
             <button class="nav-logout-btn" @click="handleLogout">{{ t('nav.logout') }}</button>
           </template>
           <template v-else>
@@ -112,31 +161,15 @@ onBeforeUnmount(() => {
 
     <div class="layout-body">
       <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
-      <div class="sidebar-inner">
-        <RouterLink to="/create" class="brand">
-          <span class="brand-icon">◇</span>
-          <span class="brand-text gradient-text-misty">知弄</span>
-        </RouterLink>
-
-        <nav class="menu">
-          <RouterLink
-            v-for="item in menuList"
-            :key="item.to"
-            :to="item.to"
-            class="menu-item"
-            :class="[{ active: isActive(item.to) }, `menu-item--${item.color}`]"
-          >
-            <span class="menu-icon">{{ item.icon }}</span>
-            <span class="menu-label">{{ item.label }}</span>
-            <span class="menu-desc">{{ item.desc }}</span>
+        <div class="sidebar-inner">
+          <RouterLink to="/create" class="brand">
+            <span class="brand-icon">◇</span>
+            <span class="brand-text gradient-text-misty">知弄</span>
           </RouterLink>
-        </nav>
 
-        <template v-if="isAdmin">
-          <div class="admin-divider"><span>管理后台</span></div>
-          <nav class="menu admin-menu">
+          <nav class="menu">
             <RouterLink
-              v-for="item in adminMenuList"
+              v-for="item in menuList"
               :key="item.to"
               :to="item.to"
               class="menu-item"
@@ -144,52 +177,76 @@ onBeforeUnmount(() => {
             >
               <span class="menu-icon">{{ item.icon }}</span>
               <span class="menu-label">{{ item.label }}</span>
+              <span class="menu-desc">{{ item.desc }}</span>
             </RouterLink>
           </nav>
-        </template>
 
-        <div class="promo-section">
-          <div class="promo-card">
-            <span class="promo-title">新人周卡 · 免费体验</span>
-          </div>
-        </div>
+          <template v-if="isAdmin">
+            <div class="admin-divider"><span>管理后台</span></div>
+            <nav class="menu admin-menu">
+              <RouterLink
+                v-for="item in adminMenuList"
+                :key="item.to"
+                :to="item.to"
+                class="menu-item"
+                :class="[{ active: isActive(item.to) }, `menu-item--${item.color}`]"
+              >
+                <span class="menu-icon">{{ item.icon }}</span>
+                <span class="menu-label">{{ item.label }}</span>
+              </RouterLink>
+            </nav>
+          </template>
 
-        <div class="auth-panel">
-          <template v-if="auth.isLoggedIn()">
-            <div class="user-info">
-              <div class="user-avatar">{{ auth.userInfo?.nickname?.charAt(0) || 'U' }}</div>
-              <div class="user-detail">
-                <span class="user-name">{{ auth.userInfo?.nickname || '用户' }}</span>
-                <span class="user-role">创作者</span>
-              </div>
+          <div class="promo-section">
+            <div class="promo-card">
+              <span class="promo-title">新人周卡 · 免费体验</span>
             </div>
-            <a class="logout-btn" @click="handleLogout">退出</a>
-          </template>
-          <template v-else>
-            <RouterLink to="/login" class="auth-link auth-link--primary">登录</RouterLink>
-            <RouterLink to="/register" class="auth-link">注册</RouterLink>
-          </template>
+          </div>
+
+          <div class="auth-panel">
+            <template v-if="auth.isLoggedIn()">
+              <div class="user-info">
+                <div class="user-avatar">{{ auth.userInfo?.nickname?.charAt(0) || 'U' }}</div>
+                <div class="user-detail">
+                  <span class="user-name">{{ auth.userInfo?.nickname || '用户' }}</span>
+                  <span class="user-role">创作者</span>
+                </div>
+              </div>
+              <a class="logout-btn" @click="handleLogout">退出</a>
+            </template>
+            <template v-else>
+              <RouterLink to="/login" class="auth-link auth-link--primary">登录</RouterLink>
+              <RouterLink to="/register" class="auth-link">注册</RouterLink>
+            </template>
+          </div>
+
+          <button class="collapse-btn" @click="sidebarCollapsed = !sidebarCollapsed">
+            {{ sidebarCollapsed ? '▶' : '◀' }}
+          </button>
         </div>
+      </aside>
 
-        <button class="collapse-btn" @click="sidebarCollapsed = !sidebarCollapsed">
-          {{ sidebarCollapsed ? '▶' : '◀' }}
-        </button>
+      <div class="layout-main">
+        <main class="main-content">
+          <slot />
+        </main>
       </div>
-    </aside>
-
-    <div class="layout-main">
-      <main class="main-content">
-        <slot />
-      </main>
-    </div>
     </div>
 
-    <Transition name="toast">
-      <div v-if="errorMessage" class="toast toast-error">{{ errorMessage }}</div>
-    </Transition>
-    <Transition name="toast">
-      <div v-if="successMessage" class="toast toast-success">{{ successMessage }}</div>
-    </Transition>
+    <!-- Toast 消息堆叠 -->
+    <TransitionGroup name="toast" tag="div" class="toast-stack">
+      <div
+        v-for="msg in toast.toasts"
+        :key="msg.id"
+        :class="['toast', `toast-${msg.type}`]"
+        @click="toast.dismiss(msg.id)"
+      >
+        <span class="toast-icon">
+          {{ { error: '✕', success: '✓', info: 'ℹ' }[msg.type] || 'ℹ' }}
+        </span>
+        {{ msg.message }}
+      </div>
+    </TransitionGroup>
 
     <!-- 充值弹窗 -->
     <RechargeModal v-if="showRechargeModal" @close="showRechargeModal = false" />
@@ -249,7 +306,6 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin: 0 auto;
 }
 
 .top-nav-link {
@@ -260,7 +316,6 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   text-decoration: none;
   transition: all var(--transition-fast);
-  position: relative;
 }
 
 .top-nav-link:hover {
@@ -274,11 +329,56 @@ onBeforeUnmount(() => {
   border-bottom: 2px solid var(--color-misty-blue-soft);
 }
 
-.top-nav-user {
+.top-nav-right {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  margin-left: auto;
   flex-shrink: 0;
+}
+
+/* --- Locale Switcher --- */
+.locale-switcher {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+
+.locale-btn {
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.locale-btn:hover { color: var(--text-primary); }
+
+.locale-btn.active {
+  background: var(--color-misty-blue-deep);
+  color: #fff;
+}
+
+/* --- Theme Button --- */
+.theme-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.theme-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
 }
 
 .user-points {
@@ -448,6 +548,10 @@ onBeforeUnmount(() => {
   background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), transparent);
 }
 
+.menu-item--candy::before {
+  background: linear-gradient(135deg, rgba(238, 162, 180, 0.12), transparent);
+}
+
 .menu-item:hover {
   color: var(--text-primary);
 }
@@ -481,10 +585,14 @@ onBeforeUnmount(() => {
   border-left: 2px solid #ffc107;
 }
 
+.menu-item--candy.active {
+  border-left: 2px solid var(--color-candy-pink);
+}
+
 .menu-icon {
-  font-size: 14px;
+  font-size: 15px;
   flex-shrink: 0;
-  width: 20px;
+  width: 22px;
   text-align: center;
 }
 
@@ -694,11 +802,20 @@ onBeforeUnmount(() => {
   padding: var(--space-lg) var(--space-xl) var(--space-3xl);
 }
 
-/* --- Toast --- */
-.toast {
+/* --- Toast Stack --- */
+.toast-stack {
   position: fixed;
   right: var(--space-xl);
   bottom: var(--space-xl);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-sm);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  max-width: 380px;
+}
+
+.toast {
   background: var(--bg-elevated);
   color: var(--text-primary);
   padding: 12px 20px;
@@ -706,27 +823,69 @@ onBeforeUnmount(() => {
   font-size: var(--text-sm);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-primary);
-  z-index: var(--z-toast);
   backdrop-filter: blur(12px);
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  transition: all var(--transition-base);
+}
+
+.toast:hover {
+  opacity: 0.85;
+}
+
+.toast-icon {
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .toast-error {
-  border-color: var(--color-crimson-soft);
+  border-color: rgba(200, 85, 84, 0.4);
+}
+.toast-error .toast-icon {
+  background: rgba(200, 85, 84, 0.2);
+  color: var(--color-crimson-soft);
 }
 
 .toast-success {
-  border-color: var(--color-dark-green-soft);
+  border-color: rgba(61, 107, 86, 0.4);
+}
+.toast-success .toast-icon {
+  background: rgba(61, 107, 86, 0.2);
+  color: var(--color-dark-green-soft);
 }
 
+.toast-info {
+  border-color: rgba(123, 156, 191, 0.4);
+}
+.toast-info .toast-icon {
+  background: rgba(123, 156, 191, 0.2);
+  color: var(--color-misty-blue-soft);
+}
+
+/* Toast transitions */
 .toast-enter-active,
 .toast-leave-active {
   transition: all var(--transition-base);
 }
 
-.toast-enter-from,
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(24px) scale(0.95);
+}
+
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(-8px) scale(0.95);
 }
 
 /* --- Responsive --- */
@@ -767,5 +926,12 @@ onBeforeUnmount(() => {
   .main-content {
     padding: var(--space-md) var(--space-md) var(--space-2xl);
   }
+
+  .top-nav-inner {
+    padding: 0 var(--space-md);
+  }
+
+  .locale-switcher { display: none; }
+  .top-nav-right { gap: 4px; }
 }
 </style>

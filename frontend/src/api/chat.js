@@ -1,4 +1,5 @@
 import http from './http'
+import { readStream } from '../utils/sse'
 
 const BASE = '/api/v1'
 
@@ -67,11 +68,9 @@ export const chatApi = {
   },
   sendMessageStream({ messages, systemPrompt, model, thinkingMode = false, reasoningEffort = 'medium', sceneContext, conversationId, aiProvider }) {
     const controller = new AbortController()
-    let cancelled = false
 
     const stream = {
       cancel() {
-        cancelled = true
         controller.abort()
       },
       onChunk: null,
@@ -104,53 +103,11 @@ export const chatApi = {
           return
         }
 
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-
-        const processEvent = (data) => {
-          if (data === '[DONE]') {
-            stream.onDone?.()
-            return true
-          }
-          if (data.startsWith('[ERROR]')) {
-            stream.onError?.(data.slice(8))
-            return true
-          }
-          stream.onChunk?.(data)
-          return false
-        }
-
-        let eventLines = []
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-
-          for (const line of lines) {
-            if (line === '') {
-              if (eventLines.length > 0) {
-                const joined = eventLines.join('\n')
-                eventLines = []
-                if (processEvent(joined)) return
-              }
-              continue
-            }
-            if (line.startsWith('data: ')) {
-              eventLines.push(line.slice(6))
-            }
-          }
-        }
-        // Flush remaining at stream end
-        if (eventLines.length > 0) {
-          const joined = eventLines.join('\n')
-          if (processEvent(joined)) return
-        }
-        stream.onDone?.()
+        await readStream(res, {
+          onChunk: (data) => stream.onChunk?.(data),
+          onDone: () => stream.onDone?.(),
+          onError: (msg) => stream.onError?.(msg),
+        })
       } catch (e) {
         if (e.name !== 'AbortError') {
           stream.onError?.(e.message || '网络错误')

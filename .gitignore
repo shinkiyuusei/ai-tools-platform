@@ -24,6 +24,9 @@ frontend/dist/
 # MCP config (contains API keys)
 .mcp.json
 
+# Repo-scoped Codex config (contains API keys)
+.codex/
+
 # Claude local settings (machine-specific)
 .claude/settings.local.json
 

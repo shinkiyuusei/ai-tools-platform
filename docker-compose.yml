@@ -11,7 +11,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - C:/ProgramData/MySQL/MySQL Server 8.4/Data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
       - ./database:/docker-entrypoint-initdb.d
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --lower-case-table-names=1 --disable-log-bin
 
@@ -21,7 +21,7 @@ services:
     restart: unless-stopped
     command: redis-server --requirepass redis123456
     ports:
-      - "6380:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
 

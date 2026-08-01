@@ -7,8 +7,10 @@ All transactions are recorded in t_credit_log synchronously.
 """
 
 import logging
+import math
 import time
 
+from ..core.errors import AppError, ErrorCode
 from ..extensions import get_redis_client
 from ..utils.mysql import execute, query_one
 from ..utils.snowflake import generate_id
@@ -42,6 +44,27 @@ def _ensure_in_redis(user_id: int) -> int:
 def get_balance(user_id: int) -> int:
     """Get current credit balance (from Redis, fallback to MySQL)."""
     return _ensure_in_redis(user_id)
+
+
+def ensure_positive_balance(user_id: int) -> int:
+    """Raise AppError when the user's balance has gone negative."""
+    balance = get_balance(user_id)
+    if balance < 0:
+        raise AppError(ErrorCode.FORBIDDEN, "积分已透支，无法继续对话，请联系管理员充值")
+    return balance
+
+
+def deduct_for_tokens(user_id: int, tokens: int, **kwargs) -> int:
+    """Deduct credits based on token usage (100 tokens = 1 credit, ceil).
+
+    Returns the deducted amount.
+    """
+    if not tokens:
+        return 0
+    deduction = math.ceil(tokens / 100)
+    ensure_positive_balance(user_id)
+    deduct(user_id, deduction, tokens_used=tokens, **kwargs)
+    return deduction
 
 
 def deduct(user_id: int, amount: int, *, conversation_id: int = 0,

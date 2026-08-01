@@ -1,105 +1,65 @@
 <script setup>
-import { ref, nextTick, onMounted, computed } from 'vue'
+
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { characterApi } from '../api/character'
-import { conversationApi } from '../api/chat'
-import { useAuthStore } from '../stores/auth'
 import AppLayout from '../layouts/AppLayout.vue'
 import { parseImmersiveContent, extractStatusSection } from '../utils/messageRenderer'
 import StatusPanel from '../components/StatusPanel.vue'
+import { useChatSession } from '../composables/useChatSession'
 
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
 const characterId = Number(route.params.id)
 
 const character = ref(null)
 const loading = ref(true)
-const messages = ref([])
-const inputText = ref('')
-const sending = ref(false)
-const selectedModel = ref('deepseek-v4-flash')
-const thinkingMode = ref(false)
-const activeStream = ref(null)
-const currentConversationId = ref(null)
-const conversationList = ref([])
 const liked = ref(false)
 const collected = ref(false)
 const latestStatus = ref(null)
 const statusSchema = ref([])
 
-const models = [
-  { key: 'deepseek-v4-flash', label: 'DeepSeek Flash' },
-  { key: 'deepseek-v4-pro', label: 'DeepSeek Pro' },
-]
-
-const ensureConversation = async () => {
-  if (currentConversationId.value) return
-  try {
-    const res = await conversationApi.create(characterId, 'character', '')
-    currentConversationId.value = res.data.id
-    loadConversationList()
-  } catch (e) {
-    console.error('Failed to create conversation:', e)
-  }
-}
+// ---- Shared chat session (providers, conversations, streaming) ----
+const {
+  messages,
+  inputText,
+  sending,
+  selectedModel,
+  thinkingMode,
+  aiProvider,
+  activeStream,
+  currentConversationId,
+  conversationList,
+  providers,
+  models,
+  selectProvider,
+  scrollToBottom,
+  ensureConversation,
+  loadConversationList,
+  loadConversation,
+  switchConversation,
+  newConversation,
+  deleteConversation,
+  saveMessages,
+  appendUserMessage,
+  appendAssistantMessage,
+  stopStream,
+  readStream,
+} = useChatSession({
+  entityType: 'character',
+  entityId: characterId,
+  scrollSelector: '.messages-container',
+  reloadListOnNew: true,
+})
 
 const loadChatConfig = async () => {
   try {
     const res = await characterApi.getChatConfig(characterId)
-      statusSchema.value = res.data.statusSchema || []
+    statusSchema.value = res.data.statusSchema || []
     character.value = res.data
   } catch (e) {
     console.error('Failed to load character config:', e)
   }
-}
-
-const loadMessages = async () => {
-  if (!currentConversationId.value) return
-  try {
-    const res = await conversationApi.getDetail(currentConversationId.value)
-    if (res.data?.messages) {
-      messages.value = res.data.messages.map(m => ({
-        role: m.role,
-        content: m.content,
-      }))
-      await nextTick()
-      scrollToBottom()
-    }
-  } catch (e) {
-    console.error('Failed to load messages:', e)
-  }
-}
-
-const loadConversationList = async () => {
-  try {
-    const res = await conversationApi.list(characterId, 'character')
-    conversationList.value = res.data.list || []
-  } catch (e) { /* ignore */ }
-}
-
-const switchConversation = async (convId) => {
-  if (convId === currentConversationId.value) return
-  currentConversationId.value = convId
-  messages.value = []
-  await loadMessages()
-}
-
-const deleteConversation = async (convId) => {
-  try {
-    await conversationApi.remove(convId)
-    if (currentConversationId.value === convId) {
-      currentConversationId.value = null
-      messages.value = []
-    }
-    loadConversationList()
-  } catch (e) { /* ignore */ }
-}
-
-const newConversation = () => {
-  currentConversationId.value = null
-  messages.value = []
-  loadConversationList()
 }
 
 const sendMessage = async () => {
@@ -109,11 +69,8 @@ const sendMessage = async () => {
   await ensureConversation()
   if (!currentConversationId.value) return
 
-  messages.value.push({ role: 'user', content: text })
-  inputText.value = ''
+  appendUserMessage(text)
   sending.value = true
-  await nextTick()
-  scrollToBottom()
 
   const systemPrompt = character.value?.systemPrompt || ''
   const chatMessages = systemPrompt
@@ -141,47 +98,31 @@ const sendMessage = async () => {
         model: selectedModel.value,
         thinkingMode: thinkingMode.value,
         conversationId: currentConversationId.value,
-        aiProvider: 'deepseek',
+        aiProvider: aiProvider.value,
       }),
       signal: controller.signal,
     })
 
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
+    const assistantMsg = appendAssistantMessage()
 
-    messages.value.push({ role: 'assistant', content: '' })
-    const assistantIdx = messages.value.length - 1
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        const data = line.slice(6)
-        if (data === '[DONE]') continue
-        if (data.startsWith('[ERROR]')) continue
-        messages.value[assistantIdx].content += data
-        await nextTick()
+    await readStream(res, {
+      onChunk: (chunk) => {
+        assistantMsg.content += chunk
         scrollToBottom()
-      }
+      },
+      onDone: () => {},
+      onError: () => {},
+    })
+
+    // Extract status from the completed assistant response
+    const statusData = extractStatusSection(assistantMsg.content)
+    if (statusData) {
+      latestStatus.value = statusData
     }
-
     try {
-
-      // Extract status from the completed assistant response
-      const statusData = extractStatusSection(messages.value[assistantIdx].content)
-      if (statusData) {
-        latestStatus.value = statusData
-      }
-      await conversationApi.saveMessages(currentConversationId.value, [
+      await saveMessages([
         { role: 'user', content: text },
-        { role: 'assistant', content: messages.value[assistantIdx].content },
+        { role: 'assistant', content: assistantMsg.content },
       ])
       loadConversationList()
     } catch (e) { /* ignore */ }
@@ -192,19 +133,6 @@ const sendMessage = async () => {
     sending.value = false
     activeStream.value = null
   }
-}
-
-const stopStream = () => {
-  if (activeStream.value) {
-    activeStream.value.abort()
-    activeStream.value = null
-    sending.value = false
-  }
-}
-
-const scrollToBottom = () => {
-  const el = document.querySelector('.messages-container')
-  if (el) el.scrollTop = el.scrollHeight
 }
 
 const formatTime = (t) => {
@@ -243,12 +171,15 @@ onMounted(async () => {
     loading.value = false
     loadConversationList()
     await ensureConversation()
-    await loadMessages()
+    if (currentConversationId.value) {
+      await loadConversation(currentConversationId.value)
+    }
   } catch (e) {
     console.error('Init error:', e)
     loading.value = false
   }
 })
+
 </script>
 
 <template>
@@ -267,6 +198,9 @@ onMounted(async () => {
             </div>
           </div>
           <div class="header-right">
+            <select v-model="aiProvider" class="provider-select" @change="selectProvider($event.target.value)">
+              <option v-for="p in providers" :key="p.key" :value="p.key">{{ p.label }}</option>
+            </select>
             <select v-model="selectedModel" class="model-select">
               <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>
             </select>
@@ -678,6 +612,17 @@ onMounted(async () => {
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
   color: var(--text-primary);
+}
+
+.provider-select {
+  padding: 4px 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--color-misty-blue-deep);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-misty-blue-soft);
+  cursor: pointer;
+  font-weight: 500;
 }
 
 .think-toggle {

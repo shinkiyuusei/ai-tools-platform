@@ -7,6 +7,7 @@
  */
 
 import { extensionApi } from '../api/extensions.js'
+import { useToastStore } from '../stores/toast'
 
 /**
  * Create the sandbox API for a single extension.
@@ -60,9 +61,7 @@ export function createExtensionAPI(extId, context = {}) {
 
       /** Show a toast notification. */
       toast(message, type = 'info') {
-        window.dispatchEvent(new CustomEvent('app:toast', {
-          detail: { message, type, source: extId },
-        }))
+        useToastStore().show(message, type)
       },
     },
 

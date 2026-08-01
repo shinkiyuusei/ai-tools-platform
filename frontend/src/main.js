@@ -14,5 +14,12 @@ app.use(router)
 app.use(i18n)
 app.mount('#app')
 
+// 隐藏首屏 Loading 骨架
+const loadingEl = document.getElementById('app-loading')
+if (loadingEl) {
+  loadingEl.classList.add('hidden')
+  setTimeout(() => loadingEl.remove(), 350)
+}
+
 // Boot the extension system after the app is mounted.
 loadExtensions({}).catch(e => console.error('Extension boot failed:', e))

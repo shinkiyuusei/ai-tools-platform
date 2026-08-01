@@ -2,10 +2,9 @@
 Character card API endpoints
 """
 import json
-import math
 import os
 import uuid
-from flask import Blueprint, request, current_app, Response, stream_with_context
+from flask import Blueprint, request, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from werkzeug.utils import secure_filename
 
@@ -13,15 +12,22 @@ from ...utils.crud import dynamic_update
 from ...utils.mysql import query_one, query_all, execute
 from ...utils.response import success_response, page_response
 from ...core.errors import AppError, ErrorCode
-from ...api.v1.ai import _increment_daily_stat
-from ...services.ai.adapters import get_adapter, TOKEN_USAGE_SIGNAL
+from ...services.ai.adapters import get_adapter, get_default_provider
 from ...services.audit import audit_content
 from ...services.cache import (
     get_cached_character, set_cached_character, invalidate_character,
     cache_get, cache_set, LIST_TTL,
 )
 from ...services.chat.character_prompt_builder import build_character_system_prompt
-from ...services.credit import deduct, get_balance
+from ...services.chat.runtime import (
+    build_sse_response,
+    latest_user_content,
+    normalize_messages,
+    split_usage_signal,
+    sse_data,
+)
+from ...services.credit import deduct_for_tokens, ensure_positive_balance
+from ...services.usage import add_token_usage, increment_daily_stat
 from ...utils.writing_style import resolve_status_schema
 
 character_bp = Blueprint("character", __name__)
@@ -390,32 +396,6 @@ def get_my_characters():
 # ---- Character Chat Endpoints ----
 
 
-def _chat_ensure_credits(user_id: int):
-    balance = get_balance(user_id)
-    if balance < 0:
-        raise AppError(ErrorCode.FORBIDDEN, "积分已透支，无法继续对话，请联系管理员充值")
-
-
-def _chat_check_and_deduct(user_id: int, tokens: int, **kwargs):
-    if not tokens:
-        return 0
-    deduction = math.ceil(tokens / 100)
-    balance = get_balance(user_id)
-    if balance < 0:
-        raise AppError(ErrorCode.FORBIDDEN, "积分已透支，无法继续对话，请联系管理员充值")
-    deduct(user_id, deduction, tokens_used=tokens, **kwargs)
-    return deduction
-
-
-def _char_add_token_usage(entity_id: int, tokens: int):
-    if not entity_id or not tokens:
-        return
-    execute(
-        "UPDATE t_character_card SET use_count = use_count + %s WHERE id = %s",
-        (tokens, entity_id),
-    )
-
-
 @character_bp.get("/character/<int:character_id>/config")
 def get_character_chat_config(character_id: int):
     character = query_one(
@@ -467,21 +447,7 @@ def character_chat_stream(character_id: int):
     reasoning_effort = payload.get("reasoningEffort", "medium")
     conversation_id = payload.get("conversationId") or 0
 
-    if not isinstance(messages, list) or not messages:
-        raise AppError(ErrorCode.PARAM_INVALID, "messages 不能为空")
-
-    normalized_messages = []
-    for message in messages:
-        if not isinstance(message, dict):
-            continue
-        role = (message.get("role") or "").strip()
-        content = str(message.get("content") or "").strip()
-        if role not in ("system", "user", "assistant") or not content:
-            continue
-        normalized_messages.append({"role": role, "content": content})
-
-    if not normalized_messages:
-        raise AppError(ErrorCode.PARAM_INVALID, "messages 不能为空")
+    normalized_messages = normalize_messages(messages)
 
     character = query_one(
         f"SELECT {_CHAR_SELECT} FROM t_character_card WHERE id = %s AND status = 1",
@@ -495,18 +461,13 @@ def character_chat_stream(character_id: int):
     if system_prompt and normalized_messages[0]["role"] != "system":
         normalized_messages.insert(0, {"role": "system", "content": system_prompt})
 
-    latest_user_content = ""
-    for item in reversed(normalized_messages):
-        if item["role"] == "user":
-            latest_user_content = item["content"]
-            break
-    audit_input = audit_content(latest_user_content)
+    audit_input = audit_content(latest_user_content(normalized_messages))
     if not audit_input["passed"]:
         raise AppError(ErrorCode.PARAM_INVALID, audit_input["message"])
 
-    provider = payload.get("aiProvider") or "deepseek"
+    provider = payload.get("aiProvider") or get_default_provider()
     service = get_adapter(provider)
-    _chat_ensure_credits(user_id)
+    ensure_positive_balance(user_id)
 
     full_response = []
 
@@ -521,43 +482,31 @@ def character_chat_stream(character_id: int):
             ):
                 if not chunk:
                     continue
-                if TOKEN_USAGE_SIGNAL in chunk:
-                    try:
-                        stream_tokens = int(chunk.split(TOKEN_USAGE_SIGNAL)[1].rstrip("\0"))
-                    except (ValueError, IndexError):
-                        pass
+                tokens = split_usage_signal(chunk)
+                if tokens is not None:
+                    stream_tokens = tokens
                     continue
                 full_response.append(chunk)
-                escaped = "\ndata: ".join(chunk.split("\n"))
-                yield f"data: {escaped}\n\n"
+                yield sse_data(chunk)
         except Exception as e:
-            yield f"data: [ERROR] {str(e)}\n\n"
+            yield sse_data(f"[ERROR] {str(e)}")
             return
 
         if stream_tokens:
-            _char_add_token_usage(character_id, stream_tokens)
-            _increment_daily_stat("character", character_id)
+            add_token_usage(character_id, stream_tokens, "character")
+            increment_daily_stat("character", character_id)
             try:
-                _chat_check_and_deduct(user_id, stream_tokens, conversation_id=conversation_id)
+                deduct_for_tokens(user_id, stream_tokens, conversation_id=conversation_id)
             except AppError:
                 pass
 
-        # Guard: if AI omitted 【角色状态栏】, inject minimal fallback
+        # Guard: if AI omitted the required marker, inject minimal fallback
         full_text = "".join(full_response)
         if "【角色状态栏】" not in full_text:
             guard = "\n\n【角色状态栏】\n服装：—\n表情：—\n想法：—\n"
             full_response.append(guard)
-            for chunk in [guard]:
-                escaped = "\ndata: ".join(chunk.split("\n"))
-                yield f"data: {escaped}\n\n"
+            yield sse_data(guard)
 
         yield "data: [DONE]\n\n"
 
-    return Response(
-        stream_with_context(generate()),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    return build_sse_response(generate())

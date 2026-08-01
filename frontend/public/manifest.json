@@ -1,0 +1,18 @@
+{
+  "name": "知弄 · AI 交互式创作平台",
+  "short_name": "知弄",
+  "description": "AI 驱动的沉浸式角色扮演与故事创作平台",
+  "start_url": "/explore",
+  "display": "standalone",
+  "background_color": "#0d0d14",
+  "theme_color": "#0d0d14",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "lang": "zh-CN"
+}

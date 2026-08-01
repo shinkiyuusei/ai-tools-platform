@@ -7,6 +7,7 @@ import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
 import RechargeModal from '../components/RechargeModal.vue'
 import AppLayout from '../layouts/AppLayout.vue'
+import { notifySuccess, notifyError } from '../utils/notify'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -42,9 +43,9 @@ const handleSaveInfo = async () => {
     user.value.nickname = editForm.value.nickname
     user.value.avatar = editForm.value.avatar
     auth.updateUserInfo({ nickname: editForm.value.nickname, avatar: editForm.value.avatar })
-    window.dispatchEvent(new CustomEvent('app:error', { detail: '保存成功' }))
+    notifySuccess('保存成功')
   } catch (err) {
-    window.dispatchEvent(new CustomEvent('app:error', { detail: err.message || '保存失败' }))
+    notifyError(err.message || '保存失败')
   } finally {
     saveLoading.value = false
   }

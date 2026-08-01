@@ -27,6 +27,11 @@ class ChatAdapter(ABC):
         and must contain at minimum ``base_url`` and ``api_key``.
         """
         self.config = config
+        # Use a dedicated session with trust_env=False to avoid Windows
+        # proxy auto-detection issues that block outbound HTTPS connections.
+        import requests as _requests
+        self._session = _requests.Session()
+        self._session.trust_env = False
 
     # ------------------------------------------------------------------
     # Abstract methods — every adapter MUST implement these

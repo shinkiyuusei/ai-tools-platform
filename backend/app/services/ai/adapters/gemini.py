@@ -1,9 +1,9 @@
 """
-OpenAI adapter — matches the OpenAI chat-completion API shape.
+Gemini adapter — via OpenAI-compatible new-api proxy.
 
-This is the reference "second provider" that validates the ChatAdapter
-abstraction.  Any OpenAI-compatible service (vLLM, Ollama, LiteLLM, …)
-can be used by pointing ``OPENAI_API_BASE`` at its endpoint.
+The adapter uses the same OpenAI-compatible chat-completion shape as the
+OpenAI adapter, targeting a new-api gateway that proxies requests to
+Google Gemini models.
 """
 
 import json
@@ -15,8 +15,8 @@ from .base import TOKEN_USAGE_SIGNAL, ChatAdapter
 from . import register_adapter
 
 
-class OpenAIAdapter(ChatAdapter):
-    """Adapter for the OpenAI chat-completion API (and compatible proxies)."""
+class GeminiAdapter(ChatAdapter):
+    """Adapter for Gemini models via OpenAI-compatible proxy (new-api)."""
 
     # ------------------------------------------------------------------
     #  Private helpers
@@ -24,7 +24,7 @@ class OpenAIAdapter(ChatAdapter):
 
     def _headers(self) -> dict[str, str]:
         if not self.config.get("api_key"):
-            raise AppError(ErrorCode.GENERATE_FAILED, "未配置 OpenAI API Key")
+            raise AppError(ErrorCode.GENERATE_FAILED, "未配置 Gemini API Key")
         return {
             "Authorization": f"Bearer {self.config['api_key']}",
             "Content-Type": "application/json",
@@ -38,16 +38,14 @@ class OpenAIAdapter(ChatAdapter):
         self, messages: list[dict], model: str = "", **params
     ):
         """Stream chat completion, yielding raw text chunks."""
-        chat_model = model or self.config.get("chat_model", "gpt-4o")
+        chat_model = model or self.config.get("chat_model", "[YDE]gemini-3.1-flash-防截断-0.5")
 
         payload: dict = {
             "model": chat_model,
             "messages": messages,
             "stream": True,
+            "max_tokens": params.get("max_tokens", 4096),
         }
-
-        # Optional: OpenAI supports a higher max_tokens; keep it reasonable.
-        payload["max_tokens"] = params.get("max_tokens", 4096)
 
         try:
             response = self._session.post(
@@ -61,11 +59,11 @@ class OpenAIAdapter(ChatAdapter):
         except requests.HTTPError as exc:
             raise AppError(
                 ErrorCode.GENERATE_FAILED,
-                f"OpenAI 调用失败 [{exc.response.status_code}]: {exc.response.text[:500]}",
+                f"Gemini 调用失败 [{exc.response.status_code}]: {exc.response.text[:500]}",
             ) from exc
         except requests.RequestException as exc:
             raise AppError(
-                ErrorCode.GENERATE_FAILED, f"OpenAI 网络请求失败: {exc}"
+                ErrorCode.GENERATE_FAILED, f"Gemini 网络请求失败: {exc}"
             ) from exc
 
         total_tokens = 0
@@ -92,15 +90,14 @@ class OpenAIAdapter(ChatAdapter):
         yield f"{TOKEN_USAGE_SIGNAL}{total_tokens}\0"
 
     def list_models(self) -> list[dict]:
-        """Return the well-known OpenAI models."""
-        chat_model = self.config.get("chat_model", "gpt-4o")
+        """Return available Gemini models."""
+        chat_model = self.config.get("chat_model", "[YDE]gemini-3.1-flash-防截断-0.5")
         return [
-            {"id": chat_model, "name": chat_model},
-            {"id": "gpt-4o-mini", "name": "GPT-4o Mini"},
+            {"id": chat_model, "name": "Gemini 3.1 Pro"},
         ]
 
     def count_tokens(self, messages: list[dict]) -> int:
-        """Rough approximation: ~4 chars per token for English + CJK text."""
+        """Rough approximation: ~4 chars per token."""
         total_chars = sum(len(m.get("content", "")) for m in messages)
         return max(1, total_chars // 3)
 
@@ -118,4 +115,4 @@ class OpenAIAdapter(ChatAdapter):
 
 
 # Self-register at import time.
-register_adapter("openai", OpenAIAdapter)
+register_adapter("gemini", GeminiAdapter)

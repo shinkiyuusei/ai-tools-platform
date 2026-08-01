@@ -22,13 +22,18 @@ def register_adapter(name: str, cls: type) -> None:
     AI_BACKENDS[name] = cls
 
 
+def get_default_provider() -> str:
+    """Return the configured default AI provider name."""
+    return current_app.config.get("DEFAULT_AI_PROVIDER", DEFAULT_ADAPTER_NAME)
+
+
 def get_adapter(name: str | None = None) -> "ChatAdapter":  # noqa: F821
     """Return a configured adapter instance for *name*.
 
-    When *name* is ``None`` or empty, the default adapter is used.
+    When *name* is ``None`` or empty, the configured default adapter is used.
     Raises ``AppError(ErrorCode.PARAM_INVALID)`` for unknown names.
     """
-    name = name or DEFAULT_ADAPTER_NAME
+    name = name or get_default_provider()
     cls = AI_BACKENDS.get(name)
     if cls is None:
         raise AppError(
@@ -46,4 +51,5 @@ def list_available_adapters() -> list[str]:
 
 # Import adapters so they self-register at package-load time.
 from . import deepseek  # noqa: E402, F401
-from . import openai   # noqa: E402, F401
+from . import openai    # noqa: E402, F401
+from . import gemini    # noqa: E402, F401

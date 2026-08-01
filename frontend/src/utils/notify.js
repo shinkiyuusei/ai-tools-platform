@@ -1,11 +1,12 @@
+import { useToastStore } from '../stores/toast'
+
 /**
- * Shared notification helpers.
- * Dispatches custom events that AppLayout listens to for toast display.
+ * Shared notification helpers backed by the Pinia toast store.
  */
 export function notifySuccess(msg) {
-  window.dispatchEvent(new CustomEvent('app:success', { detail: msg }))
+  useToastStore().success(msg)
 }
 
 export function notifyError(msg) {
-  window.dispatchEvent(new CustomEvent('app:error', { detail: msg }))
+  useToastStore().error(msg)
 }

@@ -3,18 +3,118 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="知弄 - AI 交互式创作平台。探索多重人格叙事，沉浸式故事创作，角色互动体验。" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+
+    <!-- SEO Meta -->
+    <meta name="description" content="知弄 - AI 交互式创作平台。探索多重人格叙事，沉浸式故事创作，角色互动体验。AI 驱动的角色扮演与故事生成。" />
+    <meta name="keywords" content="AI,角色扮演,故事创作,AI聊天,交互式叙事,AI写作,沉浸式体验" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="知弄 · AI 交互式创作平台" />
+    <meta property="og:description" content="AI 驱动的沉浸式角色扮演与故事创作平台。探索多重人格叙事，与 AI 角色深度互动。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="知弄" />
+    <meta property="og:locale" content="zh-CN" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="知弄 · AI 交互式创作平台" />
+    <meta name="twitter:description" content="AI 驱动的沉浸式角色扮演与故事创作平台。与 AI 角色深度互动。" />
+
+    <!-- PWA -->
     <meta name="theme-color" content="#0d0d14" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.json" />
+
     <!-- Google Fonts 国内镜像: fonts.loli.net -->
     <link rel="preconnect" href="https://fonts.loli.net" />
     <link href="https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet" />
+
     <title>知弄 · AI 交互式创作平台</title>
+
     <style>
-      body { background: #0d0d14; margin: 0; }
+      /* === 首屏骨架 === */
+      body {
+        background: #0d0d14;
+        margin: 0;
+      }
+      #app-loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #0d0d14 0%, #141420 50%, #0d0d14 100%);
+        z-index: 99999;
+        transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
+      }
+      #app-loading.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .loading-brand {
+        font-size: 48px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        background: linear-gradient(135deg, #7b9cbf, #a3bedb);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 16px;
+        font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      }
+      .loading-icon {
+        width: 48px;
+        height: 48px;
+        border: 3px solid rgba(123, 156, 191, 0.15);
+        border-top-color: #7b9cbf;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* === NProgress 风格进度条 === */
+      #nprogress {
+        pointer-events: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        z-index: 100000;
+      }
+      #nprogress .bar {
+        height: 100%;
+        background: linear-gradient(90deg, #7b9cbf, #a3bedb, #7b9cbf);
+        box-shadow: 0 0 10px rgba(123, 156, 191, 0.5);
+        width: 0;
+        transition: width 0.2s ease;
+      }
+      #nprogress .bar.running {
+        animation: progress-indeterminate 1.5s ease-in-out infinite;
+      }
+      @keyframes progress-indeterminate {
+        0% { width: 0; margin-left: 0; }
+        50% { width: 70%; margin-left: 15%; }
+        100% { width: 0; margin-left: 100%; }
+      }
+
+      /* === Telegram Web App 预留 === */
     </style>
   </head>
-  <body>
+  <body data-api-prefix="/api/v1">
+    <!-- 首屏 Loading（Vue 挂载后自动隐藏） -->
+    <div id="app-loading">
+      <div class="loading-brand">知弄</div>
+      <div class="loading-icon"></div>
+    </div>
+
+    <!-- 全局进度条 -->
+    <div id="nprogress"><div class="bar"></div></div>
+
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   statusData: { type: Object, default: null },
@@ -10,6 +10,14 @@ const props = defineProps({
 const isMultiChar = computed(() => {
   return props.schema && !Array.isArray(props.schema)
 })
+
+// Track collapsed state per character name
+const collapsed = ref({})
+
+// Reset collapsed state when schema or statusData changes
+watch(() => [props.schema, props.statusData], () => {
+  collapsed.value = {}
+}, { deep: true })
 
 // Build list of { name, fields } entries for rendering.
 // Uses statusData keys as the primary character list (matching AI output),
@@ -36,6 +44,16 @@ const characters = computed(() => {
     data: props.statusData || {},
   }]
 })
+
+function toggleCollapse(name) {
+  const key = name || '_single'
+  collapsed.value[key] = !collapsed.value[key]
+}
+
+function isCollapsed(name) {
+  const key = name || '_single'
+  return !!collapsed.value[key]
+}
 
 function effectiveFields(char) {
   if (!char.fields?.length) return []
@@ -76,13 +94,33 @@ function valueClass(field, char) {
 <template>
   <div v-if="characters.length" class="status-panel">
     <template v-for="char in characters" :key="char.name || '_single'">
-      <!-- Character name header (multi-character only) -->
-      <div v-if="char.name" class="status-char-name">
+      <!-- Character name header (multi-character only) — clickable to toggle collapse -->
+      <div
+        v-if="char.name"
+        class="status-char-name"
+        :class="{ collapsed: isCollapsed(char.name) }"
+        @click="toggleCollapse(char.name)"
+      >
+        <span class="collapse-arrow">{{ isCollapsed(char.name) ? '▸' : '▾' }}</span>
         <span class="status-icon">◆</span>
         <span>{{ char.name }}</span>
       </div>
-      <!-- Fields -->
-      <div class="status-fields">
+      <!-- Single-character toggle header -->
+      <div
+        v-else
+        class="status-char-name single-toggle"
+        :class="{ collapsed: isCollapsed(null) }"
+        @click="toggleCollapse(null)"
+      >
+        <span class="collapse-arrow">{{ isCollapsed(null) ? '▸' : '▾' }}</span>
+        <span class="status-label-hint">状态栏</span>
+        <span class="field-count">{{ effectiveFields(char).length }} 项</span>
+      </div>
+      <!-- Fields (collapsible) -->
+      <div
+        class="status-fields"
+        :class="{ collapsed: isCollapsed(char.name) }"
+      >
         <div
           v-for="field in effectiveFields(char)"
           :key="field.key"
@@ -121,10 +159,61 @@ function valueClass(field, char) {
   margin-bottom: 4px;
   padding-bottom: 4px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast, 0.15s);
+}
+
+.status-char-name:hover {
+  color: var(--text-primary, #eee);
+}
+
+.status-char-name.collapsed {
+  border-bottom-color: transparent;
+  margin-bottom: 0;
 }
 
 .status-char-name:first-child {
   margin-top: 0;
+}
+
+/* Single-character toggle header */
+.status-char-name.single-toggle {
+  font-weight: 500;
+  font-size: 10px;
+  color: var(--text-tertiary, #888);
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.status-char-name.single-toggle.collapsed {
+  margin-bottom: 0;
+  border-bottom-color: transparent;
+}
+
+.collapse-arrow {
+  font-size: 10px;
+  color: var(--text-tertiary, #888);
+  transition: transform var(--transition-fast, 0.15s);
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+}
+
+.status-char-name:hover .collapse-arrow {
+  color: var(--text-primary, #eee);
+}
+
+.status-label-hint {
+  color: var(--text-tertiary, #888);
+  font-weight: 400;
+}
+
+.field-count {
+  font-weight: 400;
+  color: var(--text-tertiary, #888);
+  font-size: 10px;
+  margin-left: auto;
 }
 
 .status-icon {
@@ -136,6 +225,16 @@ function valueClass(field, char) {
   display: flex;
   flex-direction: column;
   margin-bottom: 2px;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.2s ease;
+  max-height: 600px;
+  opacity: 1;
+}
+
+.status-fields.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
 }
 
 .status-field {

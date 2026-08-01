@@ -366,5 +366,61 @@ p {
   overflow: hidden;
 }
 
+/* --- Light Theme --- */
+:root.light {
+  --bg-primary: #f5f3ef;
+  --bg-secondary: #eeebe5;
+  --bg-tertiary: #e8e4dd;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8f6f2;
+  --bg-elevated: #ffffff;
+  --bg-input: #eeebe5;
+  --bg-overlay: rgba(0, 0, 0, 0.35);
+  --bg-glass: rgba(255, 255, 255, 0.88);
+
+  --text-primary: #1a1a24;
+  --text-secondary: #4a4640;
+  --text-tertiary: #8a8580;
+  --text-disabled: #b8b4ae;
+  --text-link: var(--color-misty-blue-deep);
+  --text-link-hover: var(--color-misty-blue);
+
+  --border-primary: #d8d4ce;
+  --border-secondary: #e8e4dd;
+  --border-card: #e0dcd5;
+  --border-input: #ccc8c0;
+  --border-focus: var(--color-misty-blue);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.10);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.14);
+  --shadow-glow-misty: 0 0 20px rgba(123, 156, 191, 0.2);
+  --shadow-glow-crimson: 0 0 20px rgba(200, 85, 84, 0.18);
+  --shadow-glow-pink: 0 0 20px rgba(238, 162, 180, 0.2);
+}
+
+/* Light theme overrides for glass & gradient utilities */
+:root.light .glass {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+:root.light .gradient-hero {
+  background: linear-gradient(135deg, #f0ebe3 0%, #e8e4dd 30%, #eef0f3 60%, #f5f3ef 100%);
+}
+
+:root.light .skeleton {
+  background: linear-gradient(90deg, #e8e4dd 25%, #f0ebe3 50%, #e8e4dd 75%);
+}
+
+/* Light theme scrollbar */
+:root.light ::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+:root.light ::-webkit-scrollbar-thumb {
+  background: var(--border-primary);
+}
+
 /* --- Responsive Breakpoints Reference --- */
 /* sm: 640px | md: 768px | lg: 1024px | xl: 1280px | 2xl: 1536px */

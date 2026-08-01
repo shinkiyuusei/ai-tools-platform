@@ -1,4 +1,5 @@
 import logging
+import os
 import secrets
 
 from flask import Flask
@@ -69,9 +70,7 @@ def create_app() -> Flask:
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
     def serve_frontend(path):
-        import os as _os
-        dist_dir = _os.path.join(_os.path.dirname(_os.path.dirname(__file__)), '..', 'frontend', 'dist')
-        dist_dir = _os.path.normpath(dist_dir)
+        dist_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'frontend', 'dist'))
 
         # Only serve if we're not intercepting an API or uploads path
         if path.startswith('api/') or path.startswith('uploads/'):
@@ -79,8 +78,8 @@ def create_app() -> Flask:
             _abort(404)
 
         # Try static file first
-        file_path = _os.path.join(dist_dir, path) if path else _os.path.join(dist_dir, 'index.html')
-        if _os.path.isfile(file_path):
+        file_path = os.path.join(dist_dir, path) if path else os.path.join(dist_dir, 'index.html')
+        if os.path.isfile(file_path):
             return send_from_directory(dist_dir, path) if path else send_from_directory(dist_dir, 'index.html')
         # SPA fallback: always return index.html for non-file routes
         return send_from_directory(dist_dir, 'index.html')

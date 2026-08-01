@@ -78,7 +78,7 @@ class DeepSeekAdapter(ChatAdapter):
         """
         payload = self._request_payload(messages, model, stream=True, **params)
         try:
-            response = requests.post(
+            response = self._session.post(
                 f"{self.config['base_url']}/chat/completions",
                 json=payload,
                 headers=self._headers(),
@@ -147,7 +147,7 @@ class DeepSeekAdapter(ChatAdapter):
             thinking_mode=thinking_mode, reasoning_effort=reasoning_effort,
         )
         try:
-            response = requests.post(
+            response = self._session.post(
                 f"{self.config['base_url']}/chat/completions",
                 json=payload,
                 headers=self._headers(),
