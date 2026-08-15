@@ -257,6 +257,13 @@ def update_work_admin(work_id: int):
         updates["content"] = "%s"
         values.append(json.dumps(content, ensure_ascii=False))
 
+    if "roleConfig" in payload:
+        role_config = payload["roleConfig"]
+        if not isinstance(role_config, dict):
+            raise AppError(ErrorCode.PARAM_INVALID, "roleConfig 必须是 JSON 对象")
+        updates["role_config"] = "%s"
+        values.append(json.dumps(role_config, ensure_ascii=False))
+
     if "openingStatements" in payload:
         opening_statements = [
             {

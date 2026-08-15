@@ -69,17 +69,28 @@ const openDetail = async (row) => {
     if (d.writingStyle) {
       writingStyle.value = { ...writingStyle.value, ...d.writingStyle }
     }
-    formContent.value = JSON.stringify(d.content || {}, null, 2)
+    const advanced = {
+      roleConfig: d.role_config || {},
+      content: d.content || {},
+      summary: d.summary || '',
+      author: d.author || '',
+      language: d.language || 'zh-Hans',
+    }
+    formContent.value = JSON.stringify(advanced, null, 2)
     dialogVisible.value = true
   } catch { /* */ }
 }
 
 const handleSave = async () => {
-  let content
+  let advanced
   try {
-    content = formContent.value.trim() ? JSON.parse(formContent.value) : {}
+    advanced = formContent.value.trim() ? JSON.parse(formContent.value) : {}
   } catch {
-    alert('Content JSON 格式错误，请检查后重试')
+    alert('高级编辑 JSON 格式错误，请检查后重试')
+    return
+  }
+  if (typeof advanced !== 'object' || advanced === null || Array.isArray(advanced)) {
+    alert('高级编辑内容必须是 JSON 对象')
     return
   }
 
@@ -91,9 +102,13 @@ const handleSave = async () => {
     useCount: form.useCount,
     status: form.status,
     writingStyle: writingStyle.value,
-    content,
     openingStatements: openings.value.filter(o => o.text.trim()),
   }
+  if (advanced.roleConfig !== undefined) payload.roleConfig = advanced.roleConfig
+  if (advanced.content !== undefined) payload.content = advanced.content
+  if (advanced.summary !== undefined) payload.summary = advanced.summary
+  if (advanced.author !== undefined) payload.author = advanced.author
+  if (advanced.language !== undefined) payload.language = advanced.language
 
   if (form.tags) {
     payload.tags = form.tags.split(',').map(t => {
@@ -280,7 +295,7 @@ onMounted(fetchList)
               </div>
             </div>
             <div class="form-group form-span">
-              <label>Content JSON（高级编辑）</label>
+              <label>高级编辑（roleConfig / content / summary / author / language）</label>
               <textarea v-model="formContent" rows="12" class="field-textarea code-area"></textarea>
             </div>
           </div>
