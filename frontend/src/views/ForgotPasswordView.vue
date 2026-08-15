@@ -2,22 +2,60 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { resetPassword } from '../api/user'
+import { resetPassword, sendResetCode } from '../api/user'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
 import AppLayout from '../layouts/AppLayout.vue'
 
 const router = useRouter()
 
-const form = ref({ account: '', newPassword: '', confirmPassword: '' })
+const step = ref('code')
+const form = ref({ account: '', code: '', newPassword: '', confirmPassword: '' })
 const loading = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
+const countdown = ref(0)
+let countdownTimer = null
+
+const validateAccount = () => {
+  if (!form.value.account) {
+    errorMsg.value = '请输入手机号或邮箱'
+    return false
+  }
+  return true
+}
+
+const handleSendCode = async () => {
+  errorMsg.value = ''
+  successMsg.value = ''
+  if (!validateAccount()) return
+  loading.value = true
+  try {
+    await sendResetCode({ account: form.value.account })
+    successMsg.value = '验证码已发送，请查收'
+    step.value = 'reset'
+    startCountdown(60)
+  } catch (err) {
+    errorMsg.value = err.message || '发送失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+const startCountdown = (seconds) => {
+  countdown.value = seconds
+  clearInterval(countdownTimer)
+  countdownTimer = setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0) clearInterval(countdownTimer)
+  }, 1000)
+}
 
 const handleReset = async () => {
   errorMsg.value = ''
-  if (!form.value.account) {
-    errorMsg.value = '请输入手机号或邮箱'
+  if (!validateAccount()) return
+  if (!form.value.code) {
+    errorMsg.value = '请输入验证码'
     return
   }
   if (form.value.newPassword.length < 6) {
@@ -32,6 +70,7 @@ const handleReset = async () => {
   try {
     await resetPassword({
       account: form.value.account,
+      code: form.value.code,
       newPassword: form.value.newPassword,
     })
     successMsg.value = '密码重置成功，即将跳转登录页…'
@@ -51,7 +90,7 @@ const handleReset = async () => {
         <div class="auth-header">
           <div class="auth-icon">◇</div>
           <h1>重置密码</h1>
-          <p>输入账号和新密码</p>
+          <p>{{ step === 'code' ? '输入账号获取验证码' : '输入验证码和新密码' }}</p>
         </div>
 
         <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
@@ -60,13 +99,27 @@ const handleReset = async () => {
         <div class="form-group">
           <BaseInput v-model="form.account" placeholder="手机号 / 邮箱" label="账号" />
         </div>
-        <div class="form-group">
-          <BaseInput v-model="form.newPassword" placeholder="新密码（至少6位）" type="password" label="新密码" />
-        </div>
-        <div class="form-group">
-          <BaseInput v-model="form.confirmPassword" placeholder="确认新密码" type="password" label="确认密码" />
-        </div>
-        <BaseButton :loading="loading" block size="lg" @click="handleReset">重置密码</BaseButton>
+
+        <template v-if="step === 'code'">
+          <BaseButton :loading="loading" block size="lg" @click="handleSendCode">获取验证码</BaseButton>
+        </template>
+
+        <template v-else>
+          <div class="form-group">
+            <BaseInput v-model="form.code" placeholder="6位验证码" label="验证码" />
+          </div>
+          <div class="form-group">
+            <BaseInput v-model="form.newPassword" placeholder="新密码（至少6位）" type="password" label="新密码" />
+          </div>
+          <div class="form-group">
+            <BaseInput v-model="form.confirmPassword" placeholder="确认新密码" type="password" label="确认密码" />
+          </div>
+          <BaseButton :loading="loading" block size="lg" @click="handleReset">重置密码</BaseButton>
+          <div class="links">
+            <span v-if="countdown > 0">{{ countdown }}秒后可重新发送</span>
+            <a v-else href="#" @click.prevent="handleSendCode">重新获取验证码</a>
+          </div>
+        </template>
 
         <div class="links">
           <router-link to="/login">返回登录</router-link>

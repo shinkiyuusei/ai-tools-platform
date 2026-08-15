@@ -22,7 +22,6 @@ class BaseConfig:
     SUPPORTED_LANGUAGES: list = None
 
     MYSQL_CONFIG: dict = None
-    REDIS_URL: str = ""
     DEEPSEEK_CONFIG: dict = None
 
     def __post_init__(self):
@@ -36,10 +35,6 @@ class BaseConfig:
             "cursorclass": None,
             "autocommit": True,
         }
-        redis_password = os.getenv("REDIS_PASSWORD", "redis123456")
-        redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
-        redis_port = os.getenv("REDIS_DB_PORT", "6379")
-        self.REDIS_URL = f"redis://:{redis_password}@{redis_host}:{redis_port}/0"
         self.AI_BACKENDS = {
             "deepseek": {
                 "base_url": os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com"),
@@ -54,7 +49,7 @@ class BaseConfig:
             },
             "gemini": {
                 "base_url": os.getenv("GEMINI_API_BASE", "https://wang.aihaochi.com/v1"),
-                "api_key": os.getenv("GEMINI_API_KEY", "sk-cZwHJ8dDmKUJm7mU97Tl8Yh3L7jroZ8kwsj0pydoknpguAR1"),
+                "api_key": os.getenv("GEMINI_API_KEY", ""),
                 "chat_model": os.getenv("GEMINI_CHAT_MODEL", "[YDE]gemini-3.1-flash-防截断-0.5"),
                 "pro_model": os.getenv("GEMINI_PRO_MODEL", "[YDE]gemini-3.1-flash-防截断-0.5"),
             },

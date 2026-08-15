@@ -40,7 +40,7 @@ def chat_completions():
     normalized_messages = normalize_messages(messages)
     inject_scene_context(normalized_messages, scene_context)
 
-    entity_id, entity_type, character_state = load_conversation_state(conversation_id)
+    entity_id, entity_type, character_state = load_conversation_state(conversation_id, user_id)
 
     if system_prompt:
         system_prompt = append_state_block(system_prompt, character_state)
@@ -100,7 +100,7 @@ def chat_completions_stream():
     inject_scene_context(normalized_messages, scene_context)
 
     latest_content = latest_user_content(normalized_messages)
-    entity_id, entity_type, character_state = load_conversation_state(conversation_id)
+    entity_id, entity_type, character_state = load_conversation_state(conversation_id, user_id)
 
     if system_prompt:
         system_prompt = append_state_block(system_prompt, character_state)

@@ -69,12 +69,20 @@ const openDetail = async (row) => {
     if (d.writingStyle) {
       writingStyle.value = { ...writingStyle.value, ...d.writingStyle }
     }
-    formContent.value = JSON.stringify(d, null, 2)
+    formContent.value = JSON.stringify(d.content || {}, null, 2)
     dialogVisible.value = true
   } catch { /* */ }
 }
 
 const handleSave = async () => {
+  let content
+  try {
+    content = formContent.value.trim() ? JSON.parse(formContent.value) : {}
+  } catch {
+    alert('Content JSON 格式错误，请检查后重试')
+    return
+  }
+
   const payload = {
     name: form.name,
     cover: form.cover,
@@ -83,6 +91,8 @@ const handleSave = async () => {
     useCount: form.useCount,
     status: form.status,
     writingStyle: writingStyle.value,
+    content,
+    openingStatements: openings.value.filter(o => o.text.trim()),
   }
 
   if (form.tags) {

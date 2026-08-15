@@ -7,6 +7,7 @@ from flask_jwt_extended.exceptions import JWTExtendedException
 
 from ...core.errors import AppError, ErrorCode
 from ...services.credit import init_user_credits
+from ...services.verification import send_reset_code, verify_reset_code
 from ...utils.mysql import execute, query_one
 from ...utils.response import success_response
 from ...utils.security import check_password, hash_password
@@ -203,12 +204,17 @@ def check_session():
 def reset_password():
     payload = request.get_json(silent=True) or {}
     account = payload.get("account", "")
+    code = payload.get("code", "")
     new_password = payload.get("newPassword", "")
 
     if not account:
         raise AppError(ErrorCode.PARAM_INVALID, "账号不能为空")
+    if not code:
+        raise AppError(ErrorCode.PARAM_INVALID, "验证码不能为空")
     if not new_password or len(new_password) < 6:
         raise AppError(ErrorCode.PARAM_INVALID, "新密码长度不能少于6位")
+
+    verify_reset_code(account, code)
 
     user = query_one(
         "SELECT id FROM t_user WHERE (phone = %s OR email = %s) AND is_delete = 0",
@@ -221,6 +227,15 @@ def reset_password():
     execute("UPDATE t_user SET password = %s WHERE id = %s", (hashed, user["id"]))
 
     return success_response({"success": True, "message": "密码重置成功"})
+
+
+@user_bp.post("/user/sendResetCode")
+def send_reset_code_endpoint():
+    """Issue a password reset code. Uses a generic response to avoid account enumeration."""
+    payload = request.get_json(silent=True) or {}
+    account = payload.get("account", "")
+    send_reset_code(account, request.remote_addr or "")
+    return success_response({"success": True, "message": "如果账号存在，验证码已发送"})
 
 
 @user_bp.get("/user/info")

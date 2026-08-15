@@ -7,7 +7,7 @@ Constant entries are always injected; selective entries are tagged for the
 AI to judge relevance during response generation.
 
 Cache strategy (following ``services/cache.py`` patterns):
-    - Per-entity entry lists are cached in Redis (TTL 300 s).
+    - Per-entity entry lists may be cached (TTL 300 s) via cache helpers.
     - Writes invalidate the affected cache key.
 """
 

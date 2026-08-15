@@ -22,10 +22,10 @@
 |------|------|
 | **前端** | Vue 3 + Vite 8 + Vue Router 5 + Pinia 3 + Vue I18n + Axios |
 | **后端** | Flask 3 + Flask-JWT-Extended + Flask-CORS + Flask-Babel |
-| **数据库** | MySQL 8.0（主库）、Redis 7（缓存 / 限流 / 分析） |
+| **数据库** | MySQL 8.0 |
 | **AI** | DeepSeek API（`deepseek-v4-flash` / `deepseek-v4-pro`）、Gemini API（`[YDE]gemini-3.1-flash-防截断-0.5`），可切换 provider |
 | **扩展** | 扩展沙箱 + 市场（hook / UI 组件 / HTTP 代理） |
-| **容器** | Docker Compose（MySQL + Redis） |
+| **容器** | Docker Compose（MySQL） |
 
 ## 快速开始
 
@@ -43,7 +43,7 @@ cp .env.example .env   # 编辑 .env 填入 API Key 等配置（DeepSeek 与 Gem
 docker compose up -d
 ```
 
-启动 MySQL 8.0、Redis 7 两个服务（本机端口：MySQL `3306`、Redis `6379`）。
+启动 MySQL 8.0（本机端口 `3306`）。
 
 ### 3. 启动后端
 
@@ -118,11 +118,6 @@ MYSQL_DB_PORT=3306
 MYSQL_DB_USER=ai_user
 MYSQL_DB_PASSWORD=ai_pass_123
 MYSQL_DB_NAME=ai_tools_platform
-
-# Redis
-REDIS_HOST=127.0.0.1
-REDIS_DB_PORT=6379
-REDIS_PASSWORD=redis123456
 
 # DeepSeek（必填）
 DEEPSEEK_API_KEY=sk-xxxxxxxx

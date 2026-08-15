@@ -1,8 +1,9 @@
 from datetime import datetime
 
 from flask import Blueprint, request
-from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
+from ...core.errors import AppError, ErrorCode
 from ...utils.mysql import execute, query_all, query_one
 from ...utils.response import success_response
 from ...utils.snowflake import generate_id
@@ -10,18 +11,10 @@ from ...utils.snowflake import generate_id
 conv_bp = Blueprint("conversation", __name__)
 
 
-def _get_user_id():
-    try:
-        verify_jwt_in_request(optional=True)
-        identity = get_jwt_identity()
-        return int(identity) if identity else 0
-    except Exception:
-        return 0
-
-
 @conv_bp.post("/conversation")
+@jwt_required()
 def create():
-    user_id = _get_user_id()
+    user_id = int(get_jwt_identity())
     # Some clients may send content-type that causes get_json to fail silently;
     # fall back to raw body parsing
     payload = request.get_json(silent=True) or {}
@@ -55,14 +48,16 @@ def create():
 
 
 @conv_bp.get("/conversation/<int:conv_id>")
+@jwt_required()
 def detail(conv_id: int):
+    user_id = int(get_jwt_identity())
     conv = query_one(
         "SELECT id, user_id, entity_id, entity_type, title, message_count, create_time, update_time "
-        "FROM t_conversation WHERE id = %s AND is_delete = 0",
-        (conv_id,),
+        "FROM t_conversation WHERE id = %s AND user_id = %s AND is_delete = 0",
+        (conv_id, user_id),
     )
     if not conv:
-        return success_response(None, "对话不存在")
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "对话不存在")
     messages = query_all(
         "SELECT id, role, content, create_time FROM t_message WHERE conversation_id = %s ORDER BY id ASC",
         (conv_id,),
@@ -91,7 +86,16 @@ def detail(conv_id: int):
 
 
 @conv_bp.post("/conversation/<int:conv_id>/messages")
+@jwt_required()
 def add_messages(conv_id: int):
+    user_id = int(get_jwt_identity())
+    conv = query_one(
+        "SELECT id FROM t_conversation WHERE id = %s AND user_id = %s AND is_delete = 0",
+        (conv_id, user_id),
+    )
+    if not conv:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "对话不存在")
+
     payload = request.get_json(silent=True) or {}
     msgs = payload.get("messages") or []
 
@@ -121,18 +125,16 @@ def add_messages(conv_id: int):
 
 
 @conv_bp.get("/conversations")
+@jwt_required()
 def list_conversations():
-    user_id = _get_user_id()
+    user_id = int(get_jwt_identity())
     entity_id = request.args.get("entityId", type=int, default=0)
     entity_type = request.args.get("entityType", type=str, default="work")
     page = request.args.get("pageNum", type=int, default=1)
     page_size = min(request.args.get("pageSize", type=int, default=20), 50)
 
-    where = "is_delete = 0"
-    params = []
-    if user_id:
-        where += " AND user_id = %s"
-        params.append(user_id)
+    where = "is_delete = 0 AND user_id = %s"
+    params = [user_id]
     if entity_id:
         where += " AND entity_id = %s"
         params.append(entity_id)
@@ -168,6 +170,14 @@ def list_conversations():
 
 
 @conv_bp.delete("/conversation/<int:conv_id>")
+@jwt_required()
 def remove(conv_id: int):
+    user_id = int(get_jwt_identity())
+    conv = query_one(
+        "SELECT id FROM t_conversation WHERE id = %s AND user_id = %s AND is_delete = 0",
+        (conv_id, user_id),
+    )
+    if not conv:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "对话不存在")
     execute("UPDATE t_conversation SET is_delete = 1 WHERE id = %s", (conv_id,))
     return success_response(None, "已删除")

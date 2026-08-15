@@ -208,7 +208,7 @@ def get_work_admin(work_id: int):
 
     work = query_one(
         "SELECT id, user_id AS userId, name, cover, `desc`, tags, "
-        "role_config, openings, summary, author, language, category, "
+        "role_config, content, openings, summary, author, language, category, "
         "use_count AS useCount, status, create_time AS createTime, update_time AS updateTime "
         "FROM t_work_card WHERE id = %s",
         (work_id,),
@@ -216,7 +216,7 @@ def get_work_admin(work_id: int):
     if not work:
         raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "作品卡不存在")
 
-    for col in ("tags", "openings", "role_config"):
+    for col in ("tags", "openings", "role_config", "content"):
         work[col] = _parse_json_col(work.get(col))
 
     # Extract writingStyle from role_config for frontend convenience
@@ -251,6 +251,25 @@ def update_work_admin(work_id: int):
     if "tags" in payload:
         updates["tags"] = "%s"
         values.append(json.dumps(payload["tags"], ensure_ascii=False))
+
+    if "content" in payload:
+        content = payload["content"] if payload["content"] is not None else {}
+        updates["content"] = "%s"
+        values.append(json.dumps(content, ensure_ascii=False))
+
+    if "openingStatements" in payload:
+        opening_statements = [
+            {
+                "label": (o.get("label") or "").strip(),
+                "text": (o.get("text") or "").strip(),
+            }
+            for o in payload["openingStatements"]
+            if isinstance(o, dict) and (o.get("text") or "").strip()
+        ]
+        updates["openings"] = "%s"
+        values.append(json.dumps(opening_statements, ensure_ascii=False))
+        updates["opening"] = "%s"
+        values.append(opening_statements[0]["text"] if opening_statements else "")
 
     # Merge writingStyle into role_config (atomic JSON_SET, no read-modify-write)
     role_config_sql = None
@@ -350,18 +369,16 @@ def update_user_admin(target_user_id: int):
 
     payload = request.get_json(silent=True) or {}
 
-    # Credits must go through the Redis-backed credit service, not MySQL directly.
-    # Otherwise the admin change gets overwritten by the periodic Redis→MySQL sync.
+    # Credits must go through the credit service, not a raw column update.
+    # Otherwise the admin change bypasses the credit log audit trail.
     if "credits" in payload:
-        from ...services.credit import get_balance, grant, sync_all_to_mysql
+        from ...services.credit import get_balance, grant
 
         new_credits = int(payload["credits"])
         old_credits = get_balance(target_user_id)
         delta = new_credits - old_credits
         if delta != 0:
             grant(target_user_id, delta, source_type="admin_grant")
-            # Force immediate MySQL sync so the admin list shows the updated value
-            sync_all_to_mysql()
         # Remove credits from payload so dynamic_update doesn't touch MySQL
         del payload["credits"]
 

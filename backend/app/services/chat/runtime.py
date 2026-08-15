@@ -58,18 +58,23 @@ def inject_scene_context(messages: list[dict], scene_context: dict) -> list[dict
     return messages
 
 
-def load_conversation_state(conversation_id) -> tuple:
-    """Return (entity_id, entity_type, character_state) for a conversation."""
+def load_conversation_state(conversation_id, user_id: int = 0) -> tuple:
+    """Return (entity_id, entity_type, character_state) for an owned conversation.
+
+    Raises FORBIDDEN when a conversation id is supplied but does not belong to
+    the current user, so chat endpoints cannot attach state/usage to a
+    conversation they do not own.
+    """
     if not conversation_id:
         return 0, "work", None
 
     conv = query_one(
         "SELECT entity_id, entity_type, character_state FROM t_conversation "
-        "WHERE id = %s AND is_delete = 0",
-        (conversation_id,),
+        "WHERE id = %s AND user_id = %s AND is_delete = 0",
+        (conversation_id, user_id),
     )
     if not conv:
-        return 0, "work", None
+        raise AppError(ErrorCode.FORBIDDEN, "对话不存在或无权访问")
 
     character_state = None
     if conv.get("character_state"):

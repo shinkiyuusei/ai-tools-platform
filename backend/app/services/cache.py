@@ -1,35 +1,24 @@
-"""Redis caching helpers — card detail, lists, and analytics."""
-import json
+"""Cache helpers — disabled after the Redis removal.
 
-
-def _client():
-    from ..extensions import get_redis_client
-    return get_redis_client()
+The interface is kept so callers can re-enable an in-process or external cache
+later without touching API code.
+"""
 
 
 def cache_get(key: str):
-    val = _client().get(key)
-    if val:
-        try:
-            return json.loads(val)
-        except (json.JSONDecodeError, TypeError):
-            return val
     return None
 
 
-def cache_set(key: str, value, ttl: int = 300):
-    _client().setex(key, ttl, json.dumps(value, ensure_ascii=False))
+def cache_set(key: str, value, ttl: int = 300) -> None:
+    return None
 
 
-def cache_delete(key: str):
-    _client().delete(key)
+def cache_delete(key: str) -> None:
+    return None
 
 
-def cache_invalidate(pattern: str):
-    """Delete all keys matching a glob pattern."""
-    keys = _client().keys(pattern)
-    if keys:
-        _client().delete(*keys)
+def cache_invalidate(pattern: str) -> None:
+    return None
 
 
 # ---- Predefined key helpers ----
@@ -47,15 +36,11 @@ LIST_TTL = 60          # 1 min for lists
 
 
 def invalidate_work(work_id: int):
-    _client().delete(_work_key(work_id), "home:index", "works:hot:*")
-    cache_invalidate("works:list:*")
-    cache_invalidate("discovery:*")
+    pass
 
 
 def invalidate_character(char_id: int):
-    _client().delete(_char_key(char_id))
-    cache_invalidate("characters:list:*")
-    cache_invalidate("discovery:*")
+    pass
 
 
 def get_cached_work(work_id: int):

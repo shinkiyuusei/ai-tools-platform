@@ -1,4 +1,3 @@
-import redis
 from flask import jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -7,7 +6,6 @@ from ..utils.mysql import init_pool
 
 
 jwt = JWTManager()
-redis_client = None
 
 
 def _jwt_error_response(message):
@@ -33,8 +31,6 @@ def register_jwt_callbacks():
 
 
 def init_extensions(app):
-    global redis_client
-
     CORS(app, resources={r"/api/*": {"origins": "*", "supports_credentials": True}})
     jwt.init_app(app)
     register_jwt_callbacks()
@@ -52,9 +48,3 @@ def init_extensions(app):
 
     mysql_config = dict(app.config["MYSQL_CONFIG"])
     init_pool(mysql_config)
-
-    redis_client = redis.from_url(app.config["REDIS_URL"], decode_responses=True, protocol=2)
-
-
-def get_redis_client():
-    return redis_client

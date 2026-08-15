@@ -52,7 +52,7 @@ def _credit_grant_job():
             order_no = row["order_no"]
 
             try:
-                # 发放积分（Redis 原子操作 + 写 t_credit_log）
+                # 发放积分（MySQL 原子加积分 + 写 t_credit_log）
                 grant(user_id, total_credits, source_type="recharge")
 
                 # 标记积分已发放
@@ -97,7 +97,7 @@ def start_scheduler(app=None):
         INTERVAL_MINUTES, CREDIT_GRANT_INTERVAL_SEC,
     )
 
-    # Run once immediately so Redis is warm on first request
+    # Run once immediately so recommendation scores exist before the first request
     try:
         _refresh_job()
     except Exception:

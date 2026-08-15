@@ -35,6 +35,27 @@ def get_db():
         conn.close()
 
 
+@contextmanager
+def transaction():
+    """Run a block of statements in one MySQL transaction.
+
+    Uses an explicit ``START TRANSACTION`` so it works with DBUtils pooled
+    connections that stay in autocommit mode.  Committed on success and
+    rolled back when an exception escapes the block.
+    """
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("START TRANSACTION")
+            yield cur
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def execute(sql: str, params: tuple = None):
     with get_db() as conn:
         with conn.cursor() as cur:

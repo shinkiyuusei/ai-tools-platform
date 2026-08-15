@@ -15,6 +15,8 @@ env/
 backend/.env
 backend/.venv/
 backend/instance/
+backend/server.log
+backend/server.err.log
 
 frontend/node_modules/
 frontend/dist/

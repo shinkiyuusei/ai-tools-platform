@@ -1,49 +1,28 @@
 """
-Credit service: Redis-backed atomic credit operations with MySQL sync.
+Credit service: MySQL-backed atomic credit operations.
 
-Redis is the primary data source for credit balances (atomic DECRBY/INCRBY).
-MySQL t_user.credits is updated every 5 minutes via background sync.
-All transactions are recorded in t_credit_log synchronously.
+MySQL is the single source of truth for balances. Deductions use a conditional
+UPDATE so concurrent requests cannot overspend, and every mutation writes a
+t_credit_log row in the same transaction.
 """
 
 import logging
 import math
-import time
 
 from ..core.errors import AppError, ErrorCode
-from ..extensions import get_redis_client
-from ..utils.mysql import execute, query_one
+from ..utils.mysql import execute, query_one, transaction
 from ..utils.snowflake import generate_id
 
 logger = logging.getLogger(__name__)
 
-REDIS_KEY_PREFIX = "user:credits:"
-SYNC_KEY = "credits:sync:last"
-SYNC_INTERVAL_SEC = 300  # 5 minutes
-
-
-def _redis_key(user_id: int) -> str:
-    return f"{REDIS_KEY_PREFIX}{user_id}"
-
-
-def _ensure_in_redis(user_id: int) -> int:
-    """Load credits from MySQL into Redis if not already cached. Returns balance."""
-    redis = get_redis_client()
-    key = _redis_key(user_id)
-    balance = redis.get(key)
-    if balance is None:
-        row = query_one(
-            "SELECT credits FROM t_user WHERE id = %s AND is_delete = 0",
-            (user_id,),
-        )
-        balance = row["credits"] if row else 0
-        redis.set(key, balance)
-    return int(balance)
-
 
 def get_balance(user_id: int) -> int:
-    """Get current credit balance (from Redis, fallback to MySQL)."""
-    return _ensure_in_redis(user_id)
+    """Get current credit balance from MySQL."""
+    row = query_one(
+        "SELECT credits FROM t_user WHERE id = %s AND is_delete = 0",
+        (user_id,),
+    )
+    return row["credits"] if row else 0
 
 
 def ensure_positive_balance(user_id: int) -> int:
@@ -62,64 +41,73 @@ def deduct_for_tokens(user_id: int, tokens: int, **kwargs) -> int:
     if not tokens:
         return 0
     deduction = math.ceil(tokens / 100)
-    ensure_positive_balance(user_id)
     deduct(user_id, deduction, tokens_used=tokens, **kwargs)
     return deduction
 
 
 def deduct(user_id: int, amount: int, *, conversation_id: int = 0,
            message_id: int = 0, tokens_used: int = 0) -> int:
-    """Atomically deduct credits from user. Returns new balance.
+    """Atomically deduct credits from a user. Returns the new balance.
 
-    Raises ValueError if user has insufficient balance.
+    Raises AppError when the user has insufficient balance.
     """
-    redis = get_redis_client()
-    key = _redis_key(user_id)
-    _ensure_in_redis(user_id)
+    if amount <= 0:
+        return get_balance(user_id)
 
-    new_balance = redis.decrby(key, amount)
-    if new_balance < 0:
-        # Still allow the deduction but log a warning — the caller should
-        # check balance before starting an expensive AI call.
-        logger.warning("User %s credits went negative: %s", user_id, new_balance)
+    with transaction() as cur:
+        cur.execute(
+            "UPDATE t_user SET credits = credits - %s "
+            "WHERE id = %s AND is_delete = 0 AND credits >= %s",
+            (amount, user_id, amount),
+        )
+        if cur.rowcount == 0:
+            logger.warning("Insufficient credits for user %s (requested %s)", user_id, amount)
+            raise AppError(ErrorCode.FORBIDDEN, "积分不足，无法完成操作")
 
-    _insert_log(
-        user_id=user_id,
-        amount=-amount,
-        balance_after=new_balance,
-        conversation_id=conversation_id,
-        message_id=message_id,
-        tokens_used=tokens_used,
-        source_type="chat",
-    )
-
-    _maybe_sync()
+        cur.execute("SELECT credits FROM t_user WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        new_balance = row["credits"] if row else 0
+        _insert_log(
+            user_id=user_id,
+            amount=-amount,
+            balance_after=new_balance,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            tokens_used=tokens_used,
+            source_type="chat",
+            cursor=cur,
+        )
     return new_balance
 
 
 def grant(user_id: int, amount: int, *, source_type: str = "admin_grant") -> int:
-    """Grant credits to user (admin operation). Returns new balance."""
-    redis = get_redis_client()
-    key = _redis_key(user_id)
-    _ensure_in_redis(user_id)
+    """Grant credits to a user (admin / recharge). Returns the new balance."""
+    if amount == 0:
+        return get_balance(user_id)
 
-    new_balance = redis.incrby(key, amount)
-    _insert_log(
-        user_id=user_id,
-        amount=amount,
-        balance_after=new_balance,
-        source_type=source_type,
-    )
+    with transaction() as cur:
+        cur.execute(
+            "UPDATE t_user SET credits = credits + %s WHERE id = %s AND is_delete = 0",
+            (amount, user_id),
+        )
+        if cur.rowcount == 0:
+            raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在")
 
-    _maybe_sync()
+        cur.execute("SELECT credits FROM t_user WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        new_balance = row["credits"] if row else 0
+        _insert_log(
+            user_id=user_id,
+            amount=amount,
+            balance_after=new_balance,
+            source_type=source_type,
+            cursor=cur,
+        )
     return new_balance
 
 
 def init_user_credits(user_id: int, initial: int = 500):
-    """Set initial credits for a newly registered user."""
-    redis = get_redis_client()
-    key = _redis_key(user_id)
-    redis.set(key, initial)
+    """Record the initial credit grant for a newly registered user."""
     _insert_log(
         user_id=user_id,
         amount=initial,
@@ -128,56 +116,27 @@ def init_user_credits(user_id: int, initial: int = 500):
     )
 
 
-def sync_all_to_mysql():
-    """Sync all in-memory Redis credit balances to MySQL.
-
-    Called periodically (every 5 min) and at app shutdown.
-    """
-    redis = get_redis_client()
-    keys = redis.keys(f"{REDIS_KEY_PREFIX}*")
-    if not keys:
-        return
-
-    for key in keys:
-        try:
-            user_id = int(key.removeprefix(REDIS_KEY_PREFIX))
-            balance = redis.get(key)
-            if balance is not None:
-                execute(
-                    "UPDATE t_user SET credits = %s WHERE id = %s",
-                    (int(balance), user_id),
-                )
-        except (ValueError, Exception) as e:
-            logger.warning("Failed to sync credits for key %s: %s", key, e)
-
-    redis.set(SYNC_KEY, int(time.time()))
-    logger.info("Credit sync complete: %s users synced to MySQL", len(keys))
-
-
-def _maybe_sync():
-    """Trigger a sync if the sync interval has elapsed."""
-    redis = get_redis_client()
-    last = redis.get(SYNC_KEY)
-    if last is None or (int(time.time()) - int(last)) >= SYNC_INTERVAL_SEC:
-        sync_all_to_mysql()
-
-
 # ---------------------------------------------------------------------------
 #  Internal helpers
 # ---------------------------------------------------------------------------
 
 def _insert_log(user_id: int, amount: int, balance_after: int, *,
                 conversation_id: int = 0, message_id: int = 0,
-                tokens_used: int = 0, source_type: str = "chat"):
-    """Insert a credit transaction log record (synchronous MySQL write)."""
+                tokens_used: int = 0, source_type: str = "chat",
+                cursor=None):
+    """Insert a credit transaction log record (best-effort)."""
     try:
         log_id = generate_id()
-        execute(
+        sql = (
             "INSERT INTO t_credit_log (id, user_id, amount, balance_after, "
             "source_type, conversation_id, message_id, tokens_used) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-            (log_id, user_id, amount, balance_after, source_type,
-             conversation_id, message_id, tokens_used),
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"
         )
+        params = (log_id, user_id, amount, balance_after, source_type,
+                  conversation_id, message_id, tokens_used)
+        if cursor is not None:
+            cursor.execute(sql, params)
+        else:
+            execute(sql, params)
     except Exception:
         logger.exception("Failed to insert credit log for user %s", user_id)

@@ -447,6 +447,14 @@ def character_chat_stream(character_id: int):
     reasoning_effort = payload.get("reasoningEffort", "medium")
     conversation_id = payload.get("conversationId") or 0
 
+    if conversation_id:
+        conv = query_one(
+            "SELECT id FROM t_conversation WHERE id = %s AND user_id = %s AND is_delete = 0",
+            (conversation_id, user_id),
+        )
+        if not conv:
+            raise AppError(ErrorCode.FORBIDDEN, "对话不存在或无权访问")
+
     normalized_messages = normalize_messages(messages)
 
     character = query_one(

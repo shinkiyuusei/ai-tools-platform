@@ -5,14 +5,13 @@ from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...services.analytics import AnalyticsService
-from ...extensions import get_redis_client
 from ...utils.response import success_response
 
 analytics_bp = Blueprint("analytics", __name__)
 
 
 def get_analytics_service():
-    return AnalyticsService(get_redis_client())
+    return AnalyticsService()
 
 
 @analytics_bp.post("/analytics/event")

@@ -8,15 +8,14 @@ Computes a composite score for works and character cards based on:
   - token consumption (use_count)
 
 All dimensions are min-max normalised across currently-published cards,
-then combined with configurable weights.  Results are stored in Redis.
+then combined with configurable weights.  Results are stored in MySQL
+(t_recommend_score) and refreshed by the scheduler.
 """
+
+import json
 from datetime import date, timedelta
 
-from .cache import _client as _redis_client
-from ..utils.mysql import query_all
-
-RECOMMEND_KEY = "recommend:scores"
-RECOMMEND_TTL = 900  # 15 minutes (APScheduler refreshes every 10 min)
+from ..utils.mysql import query_all, transaction
 
 
 # --- Dimension queries --------------------------------------------------------
@@ -129,19 +128,17 @@ def compute_scores(card_type: str = "work"):
         return []
 
     card_ids = [c["id"] for c in cards]
-    n = len(cards)
 
     raw_daily = _daily_chat_counts(card_type, card_ids)
     raw_weekly = _weekly_chat_counts(card_type, card_ids)
     raw_monthly = _monthly_chat_counts(card_type, card_ids)
     raw_collections = _collection_counts(card_type, card_ids)
     raw_token = {c["id"]: int(c["use_count"] or 0) for c in cards}
-    raw_total = raw_token  # total rank is proxied by use_count
 
     daily_vals = [raw_daily.get(cid, 0) for cid in card_ids]
     weekly_vals = [raw_weekly.get(cid, 0) for cid in card_ids]
     monthly_vals = [raw_monthly.get(cid, 0) for cid in card_ids]
-    total_vals = [raw_total.get(cid, 0) for cid in card_ids]
+    total_vals = [raw_token.get(cid, 0) for cid in card_ids]
     coll_vals = [raw_collections.get(cid, 0) for cid in card_ids]
     token_vals = [raw_token.get(cid, 0) for cid in card_ids]
 
@@ -182,30 +179,58 @@ def compute_scores(card_type: str = "work"):
 # --- Scheduler integration ---------------------------------------------------
 
 def refresh_recommendations():
-    """Called by the scheduler every N minutes. Recomputes and caches."""
-    import json
-
+    """Recompute scores and upsert them into MySQL."""
     work_scores = compute_scores("work")
     char_scores = compute_scores("character")
 
-    # Build lookup: {card_id: score} for fast access by API
     payload = {
         "works": {str(item["card_id"]): item for item in work_scores},
         "characters": {str(item["card_id"]): item for item in char_scores},
     }
-    _redis_client().setex(RECOMMEND_KEY, RECOMMEND_TTL, json.dumps(payload))
+
+    rows = []
+    for card_type, scores in (("work", work_scores), ("character", char_scores)):
+        for item in scores:
+            rows.append((
+                card_type,
+                item["card_id"],
+                item["score"],
+                json.dumps(item["dimensions"], ensure_ascii=False),
+            ))
+
+    with transaction() as cur:
+        cur.execute("DELETE FROM t_recommend_score")
+        if rows:
+            cur.executemany(
+                "INSERT INTO t_recommend_score "
+                "(card_type, card_id, score, dimensions) VALUES (%s,%s,%s,%s)",
+                rows,
+            )
     return payload
 
 
 def get_cached_recommendations(card_type: str | None = None):
-    """Return cached scores.  If card_type is given, return only that type."""
-    import json
-
-    raw = _redis_client().get(RECOMMEND_KEY)
-    if not raw:
+    """Return cached scores from MySQL.  Returns None when the table is empty."""
+    rows = query_all(
+        "SELECT card_type, card_id, score, dimensions FROM t_recommend_score "
+        "ORDER BY score DESC"
+    )
+    if not rows:
         return None
 
-    payload = json.loads(raw)
+    payload = {"works": {}, "characters": {}}
+    for r in rows:
+        group = "works" if r["card_type"] == "work" else "characters"
+        try:
+            dimensions = json.loads(r["dimensions"]) if isinstance(r["dimensions"], str) else r["dimensions"]
+        except (json.JSONDecodeError, TypeError):
+            dimensions = {}
+        payload[group][str(r["card_id"])] = {
+            "card_id": r["card_id"],
+            "score": float(r["score"]),
+            "dimensions": dimensions,
+        }
+
     if card_type:
         return payload.get(card_type, {})
     return payload

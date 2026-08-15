@@ -6,7 +6,6 @@ import logging
 from flask import Blueprint, request
 
 from ...services.monitoring import MonitoringService
-from ...extensions import get_redis_client
 from ...utils.mysql import get_mysql_connection
 from ...utils.response import success_response
 
@@ -16,7 +15,7 @@ monitoring_bp = Blueprint("monitoring", __name__)
 def get_monitoring_service():
     """Get monitoring service instance"""
     logger = logging.getLogger("monitoring")
-    return MonitoringService(get_redis_client(), get_mysql_connection(), logger)
+    return MonitoringService(get_mysql_connection(), logger)
 
 
 @monitoring_bp.get("/monitoring/health")

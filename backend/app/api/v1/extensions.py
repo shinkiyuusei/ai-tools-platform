@@ -4,6 +4,7 @@ Extensions REST API — marketplace, install, user config.
 
 from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from urllib.parse import urljoin
 
 from ...core.errors import AppError, ErrorCode
 from ...services.extensions import (
@@ -11,6 +12,7 @@ from ...services.extensions import (
     uninstall_extension, update_status,
     get_user_config, set_user_config,
 )
+from ...utils.ssrf import MAX_REDIRECTS, MAX_TIMEOUT_SEC, validate_outbound_url
 from ...utils.mysql import query_one
 from ...utils.response import success_response
 
@@ -124,6 +126,21 @@ def api_set_user_config(ext_id: str):
 #  HTTP proxy for extension sandbox
 # ---------------------------------------------------------------------------
 
+_BLOCKED_PROXY_HEADERS = {
+    "host", "cookie", "content-length", "connection", "keep-alive",
+    "proxy-authorization", "proxy-connection", "te", "trailer",
+    "transfer-encoding", "upgrade", "x-forwarded-for", "x-forwarded-host",
+    "x-forwarded-proto", "x-real-ip", "x-http-method-override",
+}
+
+
+def _sanitize_proxy_headers(headers: dict) -> dict:
+    return {
+        key: value for key, value in (headers or {}).items()
+        if key.lower() not in _BLOCKED_PROXY_HEADERS
+    }
+
+
 @extensions_bp.post("/extensions/proxy/http")
 @jwt_required()
 def api_proxy_http():
@@ -139,18 +156,35 @@ def api_proxy_http():
     if method not in ("GET", "POST"):
         raise AppError(ErrorCode.PARAM_INVALID, "method 仅支持 GET/POST")
 
-    headers = dict(payload.get("headers") or {})
+    headers = _sanitize_proxy_headers(payload.get("headers") or {})
     body = payload.get("body")
+    current_url = url
+    current_method = method
+    current_body = body
 
     try:
-        resp = req_lib.request(
-            method, url, headers=headers, json=body if method == "POST" else None,
-            timeout=30,
-        )
-        return success_response({
-            "status": resp.status_code,
-            "headers": dict(resp.headers),
-            "body": resp.text[:10000],  # cap response size
-        })
+        for _ in range(MAX_REDIRECTS + 1):
+            validate_outbound_url(current_url)
+            resp = req_lib.request(
+                current_method,
+                current_url,
+                headers=headers,
+                json=current_body if current_method == "POST" else None,
+                timeout=MAX_TIMEOUT_SEC,
+                allow_redirects=False,
+            )
+            location = resp.headers.get("Location")
+            if resp.status_code in (301, 302, 303, 307, 308) and location:
+                current_url = urljoin(current_url, location)
+                if resp.status_code == 303:
+                    current_method = "GET"
+                    current_body = None
+                continue
+            return success_response({
+                "status": resp.status_code,
+                "headers": dict(resp.headers),
+                "body": resp.text[:10000],  # cap response size
+            })
+        raise AppError(ErrorCode.GENERATE_FAILED, "重定向次数过多")
     except req_lib.RequestException as exc:
         raise AppError(ErrorCode.GENERATE_FAILED, f"代理请求失败: {exc}")

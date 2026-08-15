@@ -4,8 +4,8 @@ Internationalization API endpoints
 from flask import Blueprint, request, g
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from ...extensions import get_redis_client
 from ...services.i18n import get_supported_languages, validate_language, translate
+from ...utils.mysql import execute, query_one
 from ...utils.response import success_response
 
 i18n_bp = Blueprint("i18n", __name__)
@@ -34,8 +34,7 @@ def set_user_language():
         from ...core.errors import AppError, ErrorCode
         raise AppError(ErrorCode.PARAM_INVALID, f"Unsupported language: {lang}")
     
-    # Store user's language preference in Redis
-    get_redis_client().hset("user:settings", str(user_id), lang)
+    execute("UPDATE t_user SET language = %s WHERE id = %s", (lang, user_id))
     
     # Set in current request context
     g.user_language = lang
@@ -52,7 +51,8 @@ def get_user_language():
     """Get user's preferred language"""
     user_id = int(get_jwt_identity())
     
-    current_lang = get_redis_client().hget("user:settings", str(user_id)) or "zh"
+    row = query_one("SELECT language FROM t_user WHERE id = %s", (user_id,))
+    current_lang = (row or {}).get("language") or "zh"
     
     return success_response({
         "language": current_lang

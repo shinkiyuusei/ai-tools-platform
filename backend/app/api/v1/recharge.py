@@ -163,9 +163,8 @@ def payment_notify():
     处理逻辑:
       1. RSA2 验签
       2. 校验 app_id / seller_id / 金额 / trade_status
-      3. Redis 幂等拦截
-      4. DB 条件更新订单状态
-      5. 返回 "success" 通知支付宝
+      3. DB 条件更新订单状态（仅待支付订单可更新，重复通知天然幂等）
+      4. 返回 "success" 通知支付宝
     积分发放由后台调度器异步完成
     """
     data = dict(request.form)
@@ -198,21 +197,7 @@ def payment_notify():
         logger.warning("Alipay notify: missing out_trade_no")
         return "fail", 400
 
-    # 3. Redis 幂等拦截（已处理的订单号不再重复处理）
-    try:
-        from ...extensions import get_redis_client
-        redis = get_redis_client()
-        idempotent_key = f"payment:notify:{out_trade_no}"
-        if redis.exists(idempotent_key):
-            logger.info("Alipay notify: duplicate notification for %s, ignored", out_trade_no)
-            return "success"
-        # 设置幂等标记，1 小时过期
-        redis.setex(idempotent_key, 3600, "1")
-    except Exception:
-        logger.exception("Alipay notify: Redis idempotent check failed for %s", out_trade_no)
-        # Redis 不可用时仍然继续处理（依赖 DB 条件更新兜底）
-
-    # 4. DB 条件更新：仅当状态为"待支付"时才更新为"已支付"
+    # 3. DB 条件更新：仅当状态为"待支付"时才更新为"已支付"
     affected = execute(
         "UPDATE t_recharge_order SET status = 1, trade_no = %s, pay_time = NOW() "
         "WHERE order_no = %s AND status = 0",

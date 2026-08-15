@@ -15,7 +15,8 @@ import pymysql
 from app.core.config import get_config
 
 cfg = get_config()
-mysql = cfg.MYSQL_CONFIG
+mysql = {k: v for k, v in cfg.MYSQL_CONFIG.items() if k != "cursorclass"}
+mysql["cursorclass"] = pymysql.cursors.DictCursor
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "database"
 
@@ -26,11 +27,11 @@ def get_applied():
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT COUNT(*) FROM information_schema.tables "
+                "SELECT COUNT(*) AS cnt FROM information_schema.tables "
                 "WHERE table_schema = %s AND table_name = '_migrations'",
                 (mysql["database"],),
             )
-            if cur.fetchone()[0] == 0:
+            if cur.fetchone()["cnt"] == 0:
                 cur.execute(
                     "CREATE TABLE _migrations (filename VARCHAR(255) PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
                 )
@@ -38,7 +39,7 @@ def get_applied():
                 return set()
 
             cur.execute("SELECT filename FROM _migrations")
-            return {r[0] for r in cur.fetchall()}
+            return {r["filename"] for r in cur.fetchall()}
     finally:
         conn.close()
 
