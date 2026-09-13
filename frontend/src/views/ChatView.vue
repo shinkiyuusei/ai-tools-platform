@@ -532,7 +532,8 @@ onMounted(async () => {
 /* ====== Page Layout ====== */
 .chat-page {
   display: flex;
-  height: calc(100vh - 80px);
+  /* Fit within AppLayout's header and vertical content padding. */
+  height: calc(100vh - 56px - var(--space-lg) - var(--space-3xl));
   gap: var(--space-lg);
 }
 
@@ -848,7 +849,9 @@ onMounted(async () => {
 .chat-sidebar {
   width: 340px;
   flex-shrink: 0;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -1061,8 +1064,10 @@ onMounted(async () => {
 
 /* Conversation History */
 .sb-history {
-  max-height: none;
-  overflow-y: visible;
+  flex: 0 1 auto;
+  max-height: min(48vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .btn-new-chat {
@@ -1151,8 +1156,8 @@ onMounted(async () => {
   color: var(--text-tertiary);
 }
 
-/* Comments */
-.sb-comments { flex: 1; }
+/* Keep an empty placeholder compact instead of stretching it to the viewport. */
+.sb-comments { flex: 0 0 auto; }
 
 .sb-empty-text {
   font-size: 12px;
@@ -1168,7 +1173,7 @@ onMounted(async () => {
 }
 
 @media (max-width: 640px) {
-  .chat-page { height: calc(100vh - 60px); }
+  .chat-page { height: calc(100vh - 56px - var(--space-md) - var(--space-2xl)); }
   .chat-header { padding: 10px var(--space-md); flex-wrap: wrap; }
   .chat-messages { padding: var(--space-md); }
   .chat-input-bar { padding: var(--space-sm) var(--space-md); }

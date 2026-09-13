@@ -336,7 +336,8 @@ onMounted(async () => {
 <style scoped>
 .chat-layout {
   display: flex;
-  height: calc(100vh - 64px);
+  /* Fit within AppLayout's header and vertical content padding. */
+  height: calc(100vh - 56px - var(--space-lg) - var(--space-3xl));
 }
 
 .chat-main {
@@ -351,7 +352,9 @@ onMounted(async () => {
   width: 340px;
   flex-shrink: 0;
   border-left: 1px solid var(--border-card);
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-md);
   display: flex;
   flex-direction: column;
