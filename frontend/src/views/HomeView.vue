@@ -8,7 +8,6 @@ import { useAuthStore } from '../stores/auth'
 import BaseButton from '../components/base/BaseButton.vue'
 import BaseInput from '../components/base/BaseInput.vue'
 import AppLayout from '../layouts/AppLayout.vue'
-import WritingStyleDrawer from '../components/WritingStyleDrawer.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -41,7 +40,6 @@ const form = reactive({
   gameRules: '',
   statusBar: '',
   openings: [{ label: '', text: '' }],
-  writingStyle: { contentMode: 'nsfw', sensoryDensity: 'high', pacingPreference: 'slow', powerIntensity: 'extreme', proseStyle: 'direct', wordCount: 1500 },
   aiProvider: 'deepseek',
 })
 
@@ -50,7 +48,6 @@ const EMPTY_WORK_FORM = {
   protagonist: { name: '', description: '', motivation: '' },
   worldSetting: { worldName: '', eraTech: '', coreConflict: '', toneAtmosphere: '', mainPlot: '', initialState: '' },
   gameRules: '', statusBar: '', openings: [{ label: '', text: '' }],
-  writingStyle: { contentMode: 'nsfw', sensoryDensity: 'high', pacingPreference: 'slow', powerIntensity: 'extreme', proseStyle: 'direct', wordCount: 1500 },
   aiProvider: 'deepseek',
 }
 
@@ -99,9 +96,6 @@ async function fetchWorkForEdit(workId) {
     }
     form.gameRules = w.gameRules || ''
     form.statusBar = w.statusBar || ''
-    if (w.writingStyle) {
-      form.writingStyle = { ...form.writingStyle, ...w.writingStyle }
-    }
     const openings = w.openingStatements || []
     form.openings = openings.length ? openings.map(o => ({ label: o.label || '', text: o.text || '' })) : [{ label: '', text: '' }]
   } catch (err) {
@@ -222,7 +216,6 @@ async function handleSave() {
       gameRules: form.gameRules.trim(),
       statusBar: form.statusBar.trim(),
       openingStatements: form.openings.filter(o => o.text.trim()),
-      writingStyle: form.writingStyle,
       models: ['deepseek-v4-flash'],
       aiProvider: form.aiProvider || 'deepseek',
     }
@@ -533,8 +526,6 @@ const charFields = [
       </div>
     </div>
 
-    <!-- Writing Style Drawer (work mode only) -->
-    <WritingStyleDrawer v-if="createMode === 'work'" v-model="form.writingStyle" />
   </AppLayout>
 </template>
 

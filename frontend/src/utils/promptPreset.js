@@ -43,7 +43,7 @@ function expand(text, variables) {
   ))
 }
 
-/** Compile ST prompts while inserting the platform-generated character/work prompt at its marker. */
+/** Combine user-managed preset prompts with the platform-generated card context. */
 export function compilePrompt(preset, basePrompt, variables = {}) {
   if (!preset) return basePrompt || ''
   const parts = []

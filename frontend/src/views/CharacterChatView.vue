@@ -76,6 +76,7 @@ const sendMessage = async () => {
   appendUserMessage(text)
   sending.value = true
 
+  // The card supplies context only; behavior and output rules come from the selected preset.
   const systemPrompt = applyPreset(character.value?.systemPrompt || '', { char: character.value?.name })
   const chatMessages = systemPrompt
     ? [{ role: 'system', content: systemPrompt }, ...messages.value]

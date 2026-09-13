@@ -14,7 +14,7 @@ from ...services.cache import (
     cache_get, cache_set, LIST_TTL,
 )
 from ...services.chat.prompt_builder import build_enhanced_system_prompt
-from ...utils.writing_style import normalize_writing_style, resolve_work_status_schemas
+from ...utils.writing_style import resolve_work_status_schemas
 
 chat_bp = Blueprint("chat", __name__)
 
@@ -49,7 +49,6 @@ def _parse_json(col, default=None):
 
 def _build_legacy_dict(work, role_config):
     """Build the 'legacy' config dict consumed by prompt builders."""
-    stored_ws = role_config.get("writing_style") or role_config.get("writingStyle") or {}
     return {
         "author": work.get("author", ""),
         "detailedIntro": work.get("summary", ""),
@@ -71,7 +70,6 @@ def _build_legacy_dict(work, role_config):
         },
         "gameRules": role_config.get("play_rule", ""),
         "statusBar": role_config.get("status_bar", ""),
-        "writingStyle": normalize_writing_style(stored_ws),
     }
 
 
@@ -82,8 +80,6 @@ def _build_work_data(work, perspective=None):
     openings = _parse_json(work.get("openings"), [])
 
     legacy = _build_legacy_dict(work, role_config)
-    writing_style = legacy["writingStyle"]
-
     full_prompt = build_enhanced_system_prompt(work_name, legacy, perspective)
 
     opening_text = work.get("opening", "")
@@ -132,9 +128,8 @@ def _build_work_data(work, perspective=None):
         },
         "gameRules": role_config.get("play_rule", ""),
         "statusBar": role_config.get("status_bar", ""),
-        "writingStyle": writing_style,
         "statusSchema": resolve_work_status_schemas(
-            writing_style.get("contentMode", "nsfw"),
+            "normal",
             role_config.get("npc_settings", []),
             role_config.get("protagonist_setting", {}),
         ),
@@ -176,7 +171,6 @@ def _convert_protagonist(p):
 
 
 def _make_role_config(payload):
-    ws = payload.get("writingStyle") or {}
     rc = {
         "main_plot": payload.get("mainPlot", "").strip(),
         "play_rule": payload.get("gameRules", "").strip(),
@@ -186,9 +180,6 @@ def _make_role_config(payload):
         "worldview_setting": _convert_world(payload.get("worldSetting", {})),
         "protagonist_setting": _convert_protagonist(payload.get("protagonist", {})),
     }
-    # Only store writing_style if explicitly provided
-    if ws.get("contentMode"):
-        rc["writing_style"] = normalize_writing_style(ws)
     # Store statusSchema if provided
     if "statusSchema" in payload:
         rc["statusSchema"] = payload["statusSchema"]
@@ -308,10 +299,6 @@ def update_work(work_id: int):
     if "opening" in payload:
         role_config["init_plot_status"] = payload["opening"]
         role_changed = True
-    if "writingStyle" in payload:
-        ws = payload.get("writingStyle") or {}
-        role_config["writing_style"] = normalize_writing_style(ws)
-        role_changed = True
     if role_changed:
         updates["role_config"] = "%s"
         values.append(json.dumps(role_config, ensure_ascii=False))
@@ -427,10 +414,6 @@ def update_work_config(work_id: int):
         role_config["init_plot_status"] = payload["opening"]
         role_changed = True
 
-    if "writingStyle" in payload:
-        ws = payload.get("writingStyle") or {}
-        role_config["writing_style"] = normalize_writing_style(ws)
-        role_changed = True
 
     if role_changed:
         updates["role_config"] = "%s"

@@ -235,11 +235,12 @@ onMounted(fetchList)
               <button class="btn-add-opening" @click="addOpening">+ 添加开场白</button>
             </div>
             <div class="form-group form-span">
-              <button class="btn-toggle-ws" @click="showWritingStyle = !showWritingStyle">
+              <p class="preset-hint">写作风格、输出格式和其他行为规则请在聊天页面的“提示词与预设”中配置。</p>
+              <button v-if="false" class="btn-toggle-ws" @click="showWritingStyle = !showWritingStyle">
                 {{ showWritingStyle ? '▼' : '▶' }} 写作风格配置
               </button>
             </div>
-            <div v-show="showWritingStyle" class="form-group form-span ws-inline">
+            <div v-if="false" class="form-group form-span ws-inline">
               <div class="ws-inline-group">
                 <div class="ws-inline-row">
                   <span class="ws-inline-label">内容模式</span>
