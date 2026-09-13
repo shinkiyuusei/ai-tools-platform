@@ -8,6 +8,10 @@ const props = defineProps({
   label: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
   error: { type: String, default: '' },
+  // Off by default: these inputs carry no `name`, so Chrome's autofill
+  // heuristics otherwise treat them as free-text and can overwrite typed
+  // values with a previously-saved one (see the AI provider dialog).
+  autocomplete: { type: String, default: 'off' },
 })
 const emit = defineEmits(['update:modelValue', 'enter'])
 const id = useId()
@@ -26,6 +30,7 @@ const onInput = (event) => {
       :value="modelValue"
       :placeholder="placeholder"
       :disabled="disabled"
+      :autocomplete="autocomplete"
       class="base-input"
       :class="{ 'base-input--error': error }"
       @input="onInput"

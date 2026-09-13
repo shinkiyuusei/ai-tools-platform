@@ -48,6 +48,9 @@ class OpenAIAdapter(ChatAdapter):
 
         # Optional: OpenAI supports a higher max_tokens; keep it reasonable.
         payload["max_tokens"] = params.get("max_tokens", 4096)
+        for key in ("temperature", "top_p", "frequency_penalty", "presence_penalty"):
+            if params.get(key) is not None:
+                payload[key] = params[key]
 
         try:
             response = self._session.post(
@@ -92,7 +95,29 @@ class OpenAIAdapter(ChatAdapter):
         yield f"{TOKEN_USAGE_SIGNAL}{total_tokens}\0"
 
     def list_models(self) -> list[dict]:
-        """Return the well-known OpenAI models."""
+        """Return models for this provider.
+
+        Reads ``t_ai_model`` for the matching provider row first; falls back
+        to the env-configured ``chat_model`` when the DB has no entries
+        (e.g. before the admin has clicked "fetch models").
+        """
+        try:
+            from ..provider_repo import list_all_providers
+            for p in list_all_providers():
+                if (
+                    p.get("base_url") == self.config.get("base_url")
+                    and p.get("is_active")
+                ):
+                    rows = p.get("models") or []
+                    if rows:
+                        return [
+                            {"id": m["model_id"], "name": m["display_name"]}
+                            for m in rows
+                            if m.get("is_active")
+                        ]
+                    break
+        except Exception:
+            pass
         chat_model = self.config.get("chat_model", "gpt-4o")
         return [
             {"id": chat_model, "name": chat_model},

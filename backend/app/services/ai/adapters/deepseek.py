@@ -58,8 +58,11 @@ class DeepSeekAdapter(ChatAdapter):
             "model": model or (reasoner_model if thinking_mode else chat_model),
             "messages": messages,
             "stream": stream,
-            "max_tokens": 393216,
+            "max_tokens": params.get("max_tokens", 393216),
         }
+        for key in ("temperature", "top_p", "frequency_penalty", "presence_penalty"):
+            if params.get(key) is not None:
+                payload[key] = params[key]
         if thinking_mode:
             payload["thinking"] = {"type": "enabled"}
             payload["reasoning_effort"] = reasoning_effort
@@ -137,6 +140,7 @@ class DeepSeekAdapter(ChatAdapter):
         model: str = "",
         thinking_mode: bool = False,
         reasoning_effort: str = "medium",
+        **params,
     ) -> dict:
         """Non-streaming chat completion (DeepSeek-specific).
 
@@ -145,6 +149,7 @@ class DeepSeekAdapter(ChatAdapter):
         payload = self._request_payload(
             messages, model, stream=False,
             thinking_mode=thinking_mode, reasoning_effort=reasoning_effort,
+            **params,
         )
         try:
             response = self._session.post(

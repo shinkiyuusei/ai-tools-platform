@@ -19,3 +19,18 @@ export const getUserListAdmin = (params) => http.get('/admin/user', { params })
 export const getUserAdmin = (id) => http.get(`/admin/user/${id}`)
 export const updateUserAdmin = (id, data) => http.put(`/admin/user/${id}`, data)
 export const deleteUserAdmin = (id) => http.delete(`/admin/user/${id}`)
+
+// ---- AI provider / model management ----
+export const getAiProviderList = () => http.get('/admin/ai-provider')
+export const createAiProvider = (data) => http.post('/admin/ai-provider', data)
+export const updateAiProvider = (id, data) => http.put(`/admin/ai-provider/${id}`, data)
+export const deleteAiProvider = (id) => http.delete(`/admin/ai-provider/${id}`)
+export const testAiProvider = (id) => http.post(`/admin/ai-provider/${id}/test`)
+export const testAiProviderDraft = (data) => http.post('/admin/ai-provider/test-connection', data)
+export const fetchAiModels = (id) => http.post(`/admin/ai-provider/${id}/fetch-models`)
+
+export const createAiModel = (data) => http.post('/admin/ai-model', data)
+export const updateAiModel = (id, data) => http.put(`/admin/ai-model/${id}`, data)
+export const deleteAiModel = (id) => http.delete(`/admin/ai-model/${id}`)
+
+export const getChatProviders = () => http.get('/ai/providers')

@@ -1,7 +1,20 @@
 import { ref, computed, nextTick } from 'vue'
 import { conversationApi } from '../api/chat'
-import { aiProviders } from '../config/aiProviders'
+import { getChatProviders } from '../api/admin'
 import { readStream } from '../utils/sse'
+
+// Fallback list used only when the server is unreachable (e.g. on first load
+// before login). Mirrors the previous hardcoded config/aiProviders.js shape.
+const FALLBACK_PROVIDERS = [
+  {
+    key: 'deepseek',
+    name: 'DeepSeek',
+    models: [
+      { key: 'deepseek-v4-flash', label: 'DeepSeek Flash', isDefault: true },
+      { key: 'deepseek-v4-pro', label: 'DeepSeek Pro' },
+    ],
+  },
+]
 
 /**
  * Shared chat-session logic for ChatView (work) and CharacterChatView.
@@ -20,27 +33,48 @@ export function useChatSession({
   const messages = ref([])
   const inputText = ref('')
   const sending = ref(false)
-  const selectedModel = ref('deepseek-v4-flash')
+  const selectedModel = ref('')
   const thinkingMode = ref(false)
-  const aiProvider = ref('deepseek')
+  const aiProvider = ref('')
   const activeStream = ref(null)
   const currentConversationId = ref(null)
   const conversationList = ref([])
   const loadingHistory = ref(false)
 
-  const providers = aiProviders
+  const providers = ref(FALLBACK_PROVIDERS)
 
   const currentProvider = computed(
-    () => providers.find((p) => p.key === aiProvider.value) || providers[0],
+    () => providers.value.find((p) => p.key === aiProvider.value) || providers.value[0],
   )
-  const models = computed(() => currentProvider.value.models)
+  const models = computed(() => currentProvider.value?.models || [])
+
+  async function loadProviders() {
+    try {
+      const res = await getChatProviders()
+      const list = res.data?.list || []
+      if (list.length) {
+        providers.value = list
+        if (!aiProvider.value || !list.find((p) => p.key === aiProvider.value)) {
+          aiProvider.value = list[0].key
+        }
+        const prov = list.find((p) => p.key === aiProvider.value) || list[0]
+        const def = prov?.models?.find((m) => m.isDefault) || prov?.models?.[0]
+        if (def && !selectedModel.value) {
+          selectedModel.value = def.key
+        }
+      }
+    } catch (e) {
+      // Server unreachable / not logged in — keep FALLBACK_PROVIDERS
+      if (!aiProvider.value) aiProvider.value = FALLBACK_PROVIDERS[0].key
+      if (!selectedModel.value) selectedModel.value = FALLBACK_PROVIDERS[0].models[0].key
+    }
+  }
 
   function selectProvider(key) {
     aiProvider.value = key
-    const prov = providers.find((p) => p.key === key)
-    if (prov && prov.models.length > 0) {
-      selectedModel.value = prov.models[0].key
-    }
+    const prov = providers.value.find((p) => p.key === key)
+    const def = prov?.models?.find((m) => m.isDefault) || prov?.models?.[0]
+    if (def) selectedModel.value = def.key
   }
 
   function scrollToBottom() {
@@ -175,6 +209,7 @@ export function useChatSession({
     models,
     currentProvider,
     selectProvider,
+    loadProviders,
     scrollToBottom,
     ensureConversation,
     loadConversationList,

@@ -9,6 +9,8 @@ import { formatTokens } from '../utils/format'
 import { parseImmersiveContent, extractStatusSection } from '../utils/messageRenderer'
 import StatusPanel from '../components/StatusPanel.vue'
 import { useChatSession } from '../composables/useChatSession'
+import { usePromptPresets } from '../composables/usePromptPresets'
+import PromptPresetManager from '../components/PromptPresetManager.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -23,6 +25,7 @@ const perspectiveOptions = ref([])
 const switchingPerspective = ref(false)
 const favorited = ref(false)
 const statusSchema = ref([])
+const { presets, selectedPresetId, editorOpen, loadPresets, applyPreset, generationSettings } = usePromptPresets()
 
 // ---- Shared chat session (providers, conversations, streaming) ----
 const {
@@ -39,6 +42,7 @@ const {
   providers,
   models,
   selectProvider,
+  loadProviders,
   scrollToBottom,
   ensureConversation,
   loadConversationList,
@@ -170,7 +174,7 @@ const onPerspectiveChange = async () => {
 
 
 const doStreamSend = (msgList) => {
-  const sys = work.value?.systemPrompt || ''
+  const sys = applyPreset(work.value?.systemPrompt || '', { char: work.value?.name })
   const rxMsg = appendAssistantMessage({ streaming: true })
   sending.value = true
 
@@ -183,6 +187,7 @@ const doStreamSend = (msgList) => {
     sceneContext: sceneContext.value,
     conversationId: currentConversationId.value,
     aiProvider: aiProvider.value,
+    generationSettings: generationSettings.value,
   })
 
   stream.onChunk = (chunk) => {
@@ -310,6 +315,8 @@ onMounted(async () => {
   await loadWork()
   checkFavoriteStatus()
   loadActiveLore()
+  loadProviders()
+  loadPresets()
   if (work.value) {
     await loadConversationList()
     if (conversationList.value.length > 0) {
@@ -337,6 +344,11 @@ onMounted(async () => {
             <select v-model="selectedModel" class="model-select">
               <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>
             </select>
+            <select v-model="selectedPresetId" class="model-select" title="提示词预设">
+              <option value="">平台默认提示词</option>
+              <option v-for="p in presets" :key="p.id" :value="String(p.id)">{{ p.name }}</option>
+            </select>
+            <button class="btn-new" @click="editorOpen = true">编辑预设</button>
             <select
               v-if="perspectiveOptions.length > 0"
               v-model="selectedPerspectiveKey"
@@ -509,6 +521,7 @@ onMounted(async () => {
           <div class="opening-tooltip-content">{{ tooltipText }}</div>
         </div>
       </Teleport>
+      <PromptPresetManager :open="editorOpen" :presets="presets" :selected-id="selectedPresetId" @close="editorOpen=false" @select="selectedPresetId=$event" @refresh="loadPresets" />
     </div>
 
     <div v-else class="error-state"><p>作品不存在或已下架</p></div>

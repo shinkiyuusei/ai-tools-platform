@@ -31,6 +31,7 @@ const adminMenuList = [
   { to: '/admin/character', label: '角色卡管理', icon: '▣', color: 'gold' },
   { to: '/admin/tag', label: '标签管理', icon: '▣', color: 'gold' },
   { to: '/admin/user', label: '用户管理', icon: '▣', color: 'gold' },
+  { to: '/admin/ai-provider', label: 'AI 提供商', icon: '▣', color: 'gold' },
   { to: '/admin/extensions', label: '扩展管理', icon: '▣', color: 'gold' },
 ]
 

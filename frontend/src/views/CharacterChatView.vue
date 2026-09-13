@@ -7,6 +7,8 @@ import AppLayout from '../layouts/AppLayout.vue'
 import { parseImmersiveContent, extractStatusSection } from '../utils/messageRenderer'
 import StatusPanel from '../components/StatusPanel.vue'
 import { useChatSession } from '../composables/useChatSession'
+import { usePromptPresets } from '../composables/usePromptPresets'
+import PromptPresetManager from '../components/PromptPresetManager.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +20,7 @@ const liked = ref(false)
 const collected = ref(false)
 const latestStatus = ref(null)
 const statusSchema = ref([])
+const { presets, selectedPresetId, editorOpen, loadPresets, applyPreset, generationSettings } = usePromptPresets()
 
 // ---- Shared chat session (providers, conversations, streaming) ----
 const {
@@ -33,6 +36,7 @@ const {
   providers,
   models,
   selectProvider,
+  loadProviders,
   scrollToBottom,
   ensureConversation,
   loadConversationList,
@@ -72,7 +76,7 @@ const sendMessage = async () => {
   appendUserMessage(text)
   sending.value = true
 
-  const systemPrompt = character.value?.systemPrompt || ''
+  const systemPrompt = applyPreset(character.value?.systemPrompt || '', { char: character.value?.name })
   const chatMessages = systemPrompt
     ? [{ role: 'system', content: systemPrompt }, ...messages.value]
     : [...messages.value]
@@ -99,6 +103,7 @@ const sendMessage = async () => {
         thinkingMode: thinkingMode.value,
         conversationId: currentConversationId.value,
         aiProvider: aiProvider.value,
+        ...generationSettings.value,
       }),
       signal: controller.signal,
     })
@@ -168,6 +173,8 @@ const formatContent = (content) => {
 onMounted(async () => {
   try {
     await loadChatConfig()
+    loadProviders()
+    loadPresets()
     loading.value = false
     loadConversationList()
     await ensureConversation()
@@ -204,6 +211,11 @@ onMounted(async () => {
             <select v-model="selectedModel" class="model-select">
               <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>
             </select>
+            <select v-model="selectedPresetId" class="model-select" title="提示词预设">
+              <option value="">平台默认提示词</option>
+              <option v-for="p in presets" :key="p.id" :value="String(p.id)">{{ p.name }}</option>
+            </select>
+            <button class="btn-new-chat-header" @click="editorOpen = true">编辑预设</button>
             <label class="think-toggle">
               <input type="checkbox" v-model="thinkingMode" />
               Thinking
@@ -317,6 +329,7 @@ onMounted(async () => {
       </aside>
     </div>
     <div v-else class="loading-state">加载中...</div>
+    <PromptPresetManager :open="editorOpen" :presets="presets" :selected-id="selectedPresetId" @close="editorOpen=false" @select="selectedPresetId=$event" @refresh="loadPresets" />
   </AppLayout>
 </template>
 

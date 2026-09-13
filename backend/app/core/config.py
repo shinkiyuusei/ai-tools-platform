@@ -15,6 +15,16 @@ class BaseConfig:
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
     JWT_ACCESS_TOKEN_EXPIRES: int = 60 * 60 * 24
     API_PREFIX: str = os.getenv("API_PREFIX", "/api/v1")
+
+    # SillyTavern compatibility layer
+    ST_COMPAT_ENABLED: bool = os.getenv("ST_COMPAT_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+    ST_COMPAT_DATA_DIR: str = os.getenv(
+        "ST_COMPAT_DATA_DIR",
+        str(Path(__file__).resolve().parents[2] / "data" / "st_compat"),
+    )
+    ST_COMPAT_ALLOW_KEYS_EXPOSURE: bool = os.getenv(
+        "ST_COMPAT_ALLOW_KEYS_EXPOSURE", "false"
+    ).lower() in ("1", "true", "yes", "on")
     
     # i18n settings
     BABEL_DEFAULT_LOCALE: str = "zh"

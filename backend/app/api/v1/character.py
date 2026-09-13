@@ -445,6 +445,12 @@ def character_chat_stream(character_id: int):
     model = payload.get("model") or ""
     thinking_mode = bool(payload.get("thinkingMode", False))
     reasoning_effort = payload.get("reasoningEffort", "medium")
+    generation_params = {}
+    for client_key, adapter_key in (("temperature", "temperature"), ("topP", "top_p"),
+                                    ("frequencyPenalty", "frequency_penalty"), ("presencePenalty", "presence_penalty"),
+                                    ("maxTokens", "max_tokens")):
+        if payload.get(client_key) is not None:
+            generation_params[adapter_key] = payload[client_key]
     conversation_id = payload.get("conversationId") or 0
 
     if conversation_id:
@@ -487,6 +493,7 @@ def character_chat_stream(character_id: int):
                 model=model,
                 thinking_mode=thinking_mode,
                 reasoning_effort=reasoning_effort,
+                **generation_params,
             ):
                 if not chunk:
                     continue

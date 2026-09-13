@@ -15,6 +15,7 @@ env/
 backend/.env
 backend/.venv/
 backend/instance/
+backend/data/
 backend/server.log
 backend/server.err.log
 

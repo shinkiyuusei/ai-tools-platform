@@ -46,6 +46,9 @@ class GeminiAdapter(ChatAdapter):
             "stream": True,
             "max_tokens": params.get("max_tokens", 4096),
         }
+        for key in ("temperature", "top_p", "frequency_penalty", "presence_penalty"):
+            if params.get(key) is not None:
+                payload[key] = params[key]
 
         try:
             response = self._session.post(

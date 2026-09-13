@@ -3,6 +3,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...core.errors import AppError, ErrorCode
 from ...services.ai.adapters import get_adapter, get_default_provider
+from ...services.ai.provider_repo import list_active_providers
 from ...services.audit import audit_content
 from ...services.chat.prompt_builder import _fmt_lore_entries
 from ...services.chat.runtime import (
@@ -22,6 +23,36 @@ from ...services.world_info import get_active_lore
 from ...utils.response import success_response
 
 ai_bp = Blueprint("ai", __name__)
+
+
+def _generation_params(payload):
+    """Whitelist user preset sampling fields before forwarding to adapters."""
+    result = {}
+    mapping = {"temperature": (0, 2), "topP": (0, 1), "frequencyPenalty": (-2, 2),
+               "presencePenalty": (-2, 2), "maxTokens": (1, 393216)}
+    names = {"topP": "top_p", "frequencyPenalty": "frequency_penalty",
+             "presencePenalty": "presence_penalty", "maxTokens": "max_tokens"}
+    for key, (low, high) in mapping.items():
+        if payload.get(key) is None:
+            continue
+        try:
+            value = float(payload[key])
+            value = max(low, min(high, value))
+            result[names.get(key, key)] = int(value) if key == "maxTokens" else value
+        except (TypeError, ValueError):
+            pass
+    return result
+
+
+@ai_bp.get("/ai/providers")
+@jwt_required()
+def list_providers_public():
+    """Active providers + active models for the chat UI dropdown.
+
+    Replaces the hardcoded ``config/aiProviders.js``. Shape mirrors it:
+    ``[{key, name, models: [{key, label, isDefault}]}, ...]``.
+    """
+    return success_response({"list": list_active_providers()})
 
 
 @ai_bp.post("/ai/chat/completions")
@@ -59,6 +90,7 @@ def chat_completions():
         model=model,
         thinking_mode=thinking_mode,
         reasoning_effort=reasoning_effort,
+        **_generation_params(payload),
     )
     answer = result["choices"][0]["message"]["content"]
     audit_output = audit_content(answer)
@@ -139,6 +171,7 @@ def chat_completions_stream():
                 model=model,
                 thinking_mode=thinking_mode,
                 reasoning_effort=reasoning_effort,
+                **_generation_params(payload),
             ):
                 if not chunk:
                     continue

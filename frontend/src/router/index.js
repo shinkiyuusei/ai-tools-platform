@@ -19,6 +19,7 @@ import TagManageView from '../views/admin/TagManageView.vue'
 import UserManageView from '../views/admin/UserManageView.vue'
 import WorkManageView from '../views/admin/WorkManageView.vue'
 import ExtensionManageView from '../views/admin/ExtensionManageView.vue'
+import AiProviderManageView from '../views/admin/AiProviderManageView.vue'
 import ExtensionMarketplaceView from '../views/ExtensionMarketplaceView.vue'
 
 const routes = [
@@ -42,6 +43,7 @@ const routes = [
   { path: '/admin/character', name: 'admin-character', component: CharacterManageView, meta: { requiresAuth: true } },
   { path: '/admin/work', name: 'admin-work', component: WorkManageView, meta: { requiresAuth: true } },
   { path: '/admin/extensions', name: 'admin-extensions', component: ExtensionManageView, meta: { requiresAuth: true } },
+  { path: '/admin/ai-provider', name: 'admin-ai-provider', component: AiProviderManageView, meta: { requiresAuth: true } },
   { path: '/extensions', name: 'extensions', component: ExtensionMarketplaceView },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: ErrorView, props: { code: 404 } },
 ]

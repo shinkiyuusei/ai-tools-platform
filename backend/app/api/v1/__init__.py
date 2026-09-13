@@ -2,6 +2,7 @@ from flask import Blueprint
 
 from .admin import admin_bp
 from .ai import ai_bp
+from .ai_provider_admin import ai_provider_admin_bp
 from .analytics import analytics_bp
 from .character import character_bp
 from .chat import chat_bp
@@ -14,6 +15,7 @@ from .recharge import recharge_bp
 from .user import user_bp
 from .world_info import world_info_bp
 from .extensions import extensions_bp
+from .prompt_preset import prompt_preset_bp
 
 
 def register_v1_blueprints(app):
@@ -22,6 +24,7 @@ def register_v1_blueprints(app):
     api_v1.register_blueprint(home_bp)
     api_v1.register_blueprint(user_bp)
     api_v1.register_blueprint(ai_bp)
+    api_v1.register_blueprint(ai_provider_admin_bp)
     api_v1.register_blueprint(admin_bp)
     api_v1.register_blueprint(i18n_bp)
     api_v1.register_blueprint(discovery_bp)
@@ -33,5 +36,6 @@ def register_v1_blueprints(app):
     api_v1.register_blueprint(conv_bp)
     api_v1.register_blueprint(world_info_bp)
     api_v1.register_blueprint(extensions_bp)
+    api_v1.register_blueprint(prompt_preset_bp)
 
     app.register_blueprint(api_v1)

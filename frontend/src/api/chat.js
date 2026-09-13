@@ -66,7 +66,7 @@ export const chatApi = {
   deleteWork(workId) {
     return http.delete(`/chat/work/${workId}`)
   },
-  sendMessageStream({ messages, systemPrompt, model, thinkingMode = false, reasoningEffort = 'medium', sceneContext, conversationId, aiProvider }) {
+  sendMessageStream({ messages, systemPrompt, model, thinkingMode = false, reasoningEffort = 'medium', sceneContext, conversationId, aiProvider, generationSettings = {} }) {
     const controller = new AbortController()
 
     const stream = {
@@ -93,7 +93,7 @@ export const chatApi = {
             'X-Requested-With': 'XMLHttpRequest',
             ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
           },
-          body: JSON.stringify({ messages, systemPrompt, model, thinkingMode, reasoningEffort, sceneContext, conversationId, aiProvider: aiProvider || 'deepseek' }),
+          body: JSON.stringify({ messages, systemPrompt, model, thinkingMode, reasoningEffort, sceneContext, conversationId, aiProvider: aiProvider || 'deepseek', ...generationSettings }),
           signal: controller.signal,
         })
 

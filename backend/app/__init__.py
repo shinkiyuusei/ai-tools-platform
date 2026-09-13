@@ -6,6 +6,7 @@ from flask import Flask
 from flask import send_from_directory
 
 from .api.v1 import register_v1_blueprints
+from .api.st_compat import register_st_compat_blueprints
 from .core.config import get_config
 from .core.errors import register_error_handlers
 from .extensions import init_extensions
@@ -48,8 +49,17 @@ def create_app() -> Flask:
     init_extensions(app)
     init_babel(app)
     register_v1_blueprints(app)
+    register_st_compat_blueprints(app)
     register_error_handlers(app)
     register_response_hooks(app)
+
+    # Bootstrap AI provider tables (idempotent; non-fatal on failure)
+    try:
+        with app.app_context():
+            from .services.ai.bootstrap import bootstrap_ai_providers
+            bootstrap_ai_providers()
+    except Exception:
+        logger.warning("AI provider bootstrap failed (non-fatal):", exc_info=True)
     
     # Start recommendation scheduler (daemon thread, won't block)
     try:
