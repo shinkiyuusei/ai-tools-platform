@@ -6,7 +6,9 @@ import { worldInfoApi } from '../api/worldInfo'
 import { useAuthStore } from '../stores/auth'
 import AppLayout from '../layouts/AppLayout.vue'
 import { formatTokens } from '../utils/format'
-import { parseImmersiveContent, extractStatusSection } from '../utils/messageRenderer'
+import { extractStatusSection } from '../utils/messageRenderer'
+import { extractSceneContext, parseChoices, renderChatContent } from '../utils/chatPresentation'
+import { providerDisplayName } from '../utils/aiProvider'
 import StatusPanel from '../components/StatusPanel.vue'
 import { useChatSession } from '../composables/useChatSession'
 import { usePromptPresets } from '../composables/usePromptPresets'
@@ -24,6 +26,7 @@ const selectedPerspectiveKey = ref('')
 const perspectiveOptions = ref([])
 const switchingPerspective = ref(false)
 const favorited = ref(false)
+const rating = ref({ average: 0, count: 0, userRating: null })
 const statusSchema = ref([])
 const { presets, selectedPresetId, editorOpen, loadPresets, applyPreset, generationSettings } = usePromptPresets()
 
@@ -109,6 +112,20 @@ const toggleFavorite = async () => {
   } catch {
     // silently fail
   }
+}
+
+const loadRating = async () => {
+  try {
+    const res = await chatApi.getWorkRating(workId)
+    rating.value = res.data
+  } catch { /* rating is optional metadata */ }
+}
+
+const setRating = async (value) => {
+  try {
+    const res = await chatApi.rateWork(workId, value)
+    rating.value = res.data
+  } catch { /* the HTTP client already shows the error */ }
 }
 
 const loadWork = async (perspectiveKey = '') => {
@@ -198,7 +215,7 @@ const doStreamSend = (msgList) => {
     rxMsg.streaming = false
     rxMsg.choices = parseChoices(rxMsg.content)
     rxMsg.statusData = extractStatusSection(rxMsg.content)
-    sceneContext.value = extractSceneContext(rxMsg.content)
+    sceneContext.value = extractSceneContext(rxMsg.content, work.value, sceneContext.value)
     sending.value = false
     activeStream.value = null
     scrollToBottom()
@@ -238,7 +255,7 @@ const useOpening = async (text) => {
 }
 
 
-const extractSceneContext = (content) => {
+const legacyExtractSceneContext = (content) => {
   if (!content) return null
   const worldSetting = work.value?.worldSetting
   const timeMatch = content.match(/时间[：:]\s*(.+)/)
@@ -263,7 +280,7 @@ const findChoiceIndex = (content) => {
 }
 
 
-const parseChoices = (content) => {
+const legacyParseChoices = (content) => {
   const idx = findChoiceIndex(content)
   if (idx === -1) return []
   const after = content.slice(idx)
@@ -286,16 +303,7 @@ const stripChoices = (content) => {
 
 
 const displayContent = (content) => {
-  // strip choice section first (existing logic)
-  let text = stripChoices(content)
-  // collapse triple-backtick code blocks to plain text
-  text = text.replace(/```/g, '')
-  // collapse 2+ newlines to a single newline (no blank lines)
-  text = text.replace(/\n{2,}/g, '\n')
-  text = text.trimEnd()
-  // apply immersive rendering (inner thoughts + dialogue + status extraction)
-  const { html } = parseImmersiveContent(text)
-  return html
+  return renderChatContent(content)
 }
 
 const pickChoice = (text) => {
@@ -314,6 +322,7 @@ const handleKeydown = (e) => {
 onMounted(async () => {
   await loadWork()
   checkFavoriteStatus()
+  loadRating()
   loadActiveLore()
   loadProviders()
   loadPresets()
@@ -339,7 +348,7 @@ onMounted(async () => {
           <span class="header-name">{{ work.name }}</span>
           <div class="header-actions">
             <select v-model="aiProvider" class="provider-select" @change="selectProvider($event.target.value)">
-              <option v-for="p in providers" :key="p.key" :value="p.key">{{ p.label }}</option>
+              <option v-for="p in providers" :key="p.key" :value="p.key">{{ providerDisplayName(p) }}</option>
             </select>
             <select v-model="selectedModel" class="model-select">
               <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>
@@ -440,6 +449,19 @@ onMounted(async () => {
           <div class="sb-meta">
             <span v-if="work.author">{{ work.author }}</span>
             <span>{{ formatTokens(work.useCount) }}</span>
+          </div>
+          <div class="work-rating" aria-label="作品评分">
+            <span class="rating-summary">{{ rating.average.toFixed(1) }} / 5（{{ rating.count }}）</span>
+            <span class="rating-stars">
+              <button
+                v-for="star in 5"
+                :key="star"
+                type="button"
+                :class="{ active: star <= (rating.userRating || 0) }"
+                :aria-label="`评分 ${star} 星`"
+                @click="setRating(star)"
+              >★</button>
+            </span>
           </div>
         </div>
 
@@ -959,6 +981,11 @@ onMounted(async () => {
   font-size: 11px;
   color: var(--text-tertiary);
 }
+
+.work-rating { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-tertiary); }
+.rating-stars { display: inline-flex; gap: 1px; }
+.rating-stars button { padding: 0; color: #697089; background: transparent; border: 0; cursor: pointer; font-size: 17px; line-height: 1; }
+.rating-stars button.active, .rating-stars button:hover { color: #f3c65b; }
 
 .sb-rating-row {
   display: flex;

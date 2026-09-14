@@ -7,7 +7,4 @@ export const discoveryApi = {
   getCategories() {
     return http.get('/discovery/categories')
   },
-  getTrending(params) {
-    return http.get('/discovery/trending', { params })
-  },
 }

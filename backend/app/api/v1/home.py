@@ -1,4 +1,4 @@
-from flask import Blueprint, request
+from flask import Blueprint
 
 from ...utils.categories import CATEGORIES
 from ...utils.mysql import query_all

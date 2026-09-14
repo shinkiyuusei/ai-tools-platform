@@ -24,6 +24,8 @@ class ErrorCode:
 
 
 def error_response(code: int, message: str, http_status: int):
+    from ..services.i18n import localize_api_message
+    message = localize_api_message(message, code)
     return jsonify({"code": code, "message": message, "data": None}), http_status
 
 

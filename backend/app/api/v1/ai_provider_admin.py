@@ -17,8 +17,6 @@ Mirrors the SillyTavern flow:
 
 from __future__ import annotations
 
-import json
-
 from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -30,7 +28,6 @@ from ...services.ai.provider_repo import (
     replace_provider_models,
 )
 from ...services.ai.secrets import looks_masked, mask_secret
-from ...utils.crud import dynamic_update
 from ...utils.mysql import execute, query_one
 from ...utils.response import success_response
 

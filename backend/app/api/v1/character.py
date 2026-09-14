@@ -6,9 +6,6 @@ import os
 import uuid
 from flask import Blueprint, request, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from werkzeug.utils import secure_filename
-
-from ...utils.crud import dynamic_update
 from ...utils.mysql import query_one, query_all, execute
 from ...utils.response import success_response, page_response
 from ...core.errors import AppError, ErrorCode
@@ -16,13 +13,15 @@ from ...services.ai.adapters import get_adapter, get_default_provider
 from ...services.audit import audit_content
 from ...services.cache import (
     get_cached_character, set_cached_character, invalidate_character,
-    cache_get, cache_set, LIST_TTL,
 )
 from ...services.chat.character_prompt_builder import build_character_system_prompt
 from ...services.chat.runtime import (
+    append_state_block,
     build_sse_response,
     latest_user_content,
+    load_conversation_state,
     normalize_messages,
+    persist_character_state,
     split_usage_signal,
     sse_data,
 )
@@ -453,13 +452,11 @@ def character_chat_stream(character_id: int):
             generation_params[adapter_key] = payload[client_key]
     conversation_id = payload.get("conversationId") or 0
 
+    conversation_state = None
     if conversation_id:
-        conv = query_one(
-            "SELECT id FROM t_conversation WHERE id = %s AND user_id = %s AND is_delete = 0",
-            (conversation_id, user_id),
-        )
-        if not conv:
-            raise AppError(ErrorCode.FORBIDDEN, "对话不存在或无权访问")
+        entity_id, entity_type, conversation_state = load_conversation_state(conversation_id, user_id)
+        if entity_type != "character" or int(entity_id) != character_id:
+            raise AppError(ErrorCode.FORBIDDEN, "对话不属于当前角色卡")
 
     normalized_messages = normalize_messages(messages)
 
@@ -472,6 +469,7 @@ def character_chat_stream(character_id: int):
 
     persona_content = character.get("persona_content", "")
     system_prompt = build_character_system_prompt(persona_content) if persona_content else ""
+    system_prompt = append_state_block(system_prompt, conversation_state)
     if system_prompt and normalized_messages[0]["role"] != "system":
         normalized_messages.insert(0, {"role": "system", "content": system_prompt})
 
@@ -521,6 +519,8 @@ def character_chat_stream(character_id: int):
             guard = "\n\n【角色状态栏】\n服装：—\n表情：—\n想法：—\n"
             full_response.append(guard)
             yield sse_data(guard)
+
+        persist_character_state(conversation_id, conversation_state, "".join(full_response))
 
         yield "data: [DONE]\n\n"
 

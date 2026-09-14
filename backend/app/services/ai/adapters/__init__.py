@@ -93,11 +93,6 @@ def get_adapter(name: str | None = None) -> "ChatAdapter":  # noqa: F821
     return cls(config)
 
 
-def list_available_adapters() -> list[str]:
-    """Return the names of all registered adapter classes."""
-    return list(AI_BACKENDS.keys())
-
-
 # Import adapters so they self-register at package-load time.
 from . import deepseek  # noqa: E402, F401
 from . import openai    # noqa: E402, F401

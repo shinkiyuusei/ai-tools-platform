@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import http from '../api/http.js'
 
 const USER_KEY = 'userInfo'
 
@@ -34,7 +35,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   const checkSession = async () => {
     try {
-      const { default: http } = await import('../api/http.js')
       const res = await http.get('/user/session')
       setUserInfo(res.data.userInfo)
       sessionChecked.value = true
@@ -48,7 +48,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   const refreshCredits = async () => {
     try {
-      const { default: http } = await import('../api/http.js')
       const res = await http.get('/user/info')
       if (userInfo.value) {
         userInfo.value.credits = res.data.credits
@@ -61,7 +60,6 @@ export const useAuthStore = defineStore('auth', () => {
 
   const logout = async () => {
     try {
-      const { default: http } = await import('../api/http.js')
       await http.post('/user/logout')
     } catch {
       // best-effort

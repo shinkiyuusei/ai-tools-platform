@@ -10,7 +10,6 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from ...core.errors import AppError, ErrorCode
 from ...core.recharge_products import RECHARGE_PRODUCTS, get_product_by_id
 from ...services.alipay import create_page_pay, create_wap_pay, verify_notify
-from ...services.credit import get_balance
 from ...utils.mysql import execute, query_one
 from ...utils.response import success_response
 from ...utils.snowflake import generate_id

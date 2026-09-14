@@ -48,10 +48,4 @@ export const characterApi = {
     });
   },
 
-  /** SSE streaming chat with a character */
-  sendChat(characterId, data) {
-    return http.post(`/character/${characterId}/chat`, data, {
-      responseType: 'stream',
-    });
-  },
 };

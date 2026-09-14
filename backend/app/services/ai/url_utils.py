@@ -1,10 +1,5 @@
 """URL join helpers for AI provider endpoints."""
 
-from __future__ import annotations
-
-from urllib.parse import urljoin
-
-
 def join_url(base: str, path: str) -> str:
     """Join a provider base URL with a path like ``/models``.
 

@@ -17,10 +17,6 @@ def cache_delete(key: str) -> None:
     return None
 
 
-def cache_invalidate(pattern: str) -> None:
-    return None
-
-
 # ---- Predefined key helpers ----
 
 def _work_key(work_id: int) -> str:

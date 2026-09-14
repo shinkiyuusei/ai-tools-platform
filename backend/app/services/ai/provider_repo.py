@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from typing import Optional
 
-from ...utils.mysql import execute, query_all, query_one
+from ...utils.mysql import execute, query_all
 
 #: Cache TTL in seconds. Trade-off: longer = fewer DB hits, shorter = faster
 #: propagation of admin edits to the chat path.

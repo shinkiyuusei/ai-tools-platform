@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useToastStore } from '../stores/toast'
+import i18n from '../i18n'
 
 // 从 body data-api-prefix 读取 API 前缀（支持运行时配置）
 const apiPrefix = document.body?.dataset?.apiPrefix || '/api/v1'
@@ -95,6 +96,7 @@ http.interceptors.request.use(
     if (csrfToken) {
       config.headers['X-CSRF-TOKEN'] = csrfToken
     }
+    config.headers['Accept-Language'] = i18n.global.locale.value || 'zh'
 
     if (config.method === 'get') {
       const params = config.params || {}

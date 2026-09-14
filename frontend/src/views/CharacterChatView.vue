@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { characterApi } from '../api/character'
 import AppLayout from '../layouts/AppLayout.vue'
 import { parseImmersiveContent, extractStatusSection } from '../utils/messageRenderer'
+import { providerDisplayName } from '../utils/aiProvider'
 import StatusPanel from '../components/StatusPanel.vue'
 import { useChatSession } from '../composables/useChatSession'
 import { usePromptPresets } from '../composables/usePromptPresets'
@@ -207,7 +208,7 @@ onMounted(async () => {
           </div>
           <div class="header-right">
             <select v-model="aiProvider" class="provider-select" @change="selectProvider($event.target.value)">
-              <option v-for="p in providers" :key="p.key" :value="p.key">{{ p.label }}</option>
+              <option v-for="p in providers" :key="p.key" :value="p.key">{{ providerDisplayName(p) }}</option>
             </select>
             <select v-model="selectedModel" class="model-select">
               <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}</option>

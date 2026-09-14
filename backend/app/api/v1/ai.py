@@ -6,6 +6,7 @@ from ...services.ai.adapters import get_adapter, get_default_provider
 from ...services.ai.provider_repo import list_active_providers
 from ...services.audit import audit_content
 from ...services.chat.prompt_builder import _fmt_lore_entries
+from ...services.chat.choice_generator import CHOICE_MARKER, generate_choice_block
 from ...services.chat.runtime import (
     append_state_block,
     build_sse_response,
@@ -196,16 +197,29 @@ def chat_completions_stream():
 
         persist_character_state(conversation_id, character_state, "".join(full_response))
 
-        # Guard: if AI omitted the required markers, inject fallback
+        # Keep the status fallback for legacy presets. Choice buttons, however,
+        # must be generated from this reply rather than a fixed A/B/C/D list.
         full_text = "".join(full_response)
         if "【角色状态栏】" not in full_text:
             guard = "\n\n【角色状态栏】\n服装：—\n表情：—\n想法：—\n"
             full_response.append(guard)
             yield sse_data(guard)
-        if "【抉择分支】" not in full_text:
-            guard = "\n\n【抉择分支】\nA. 继续当前行动\nB. 换个方式\nC. 观察周围\nD. 打破常规，做出一个出人意料的举动\n"
-            full_response.append(guard)
-            yield sse_data(guard)
+        if CHOICE_MARKER not in full_text:
+            try:
+                choice_block, choice_tokens = generate_choice_block(service, model, full_text)
+                if choice_block:
+                    full_response.append(choice_block)
+                    yield sse_data(choice_block)
+                if choice_tokens:
+                    add_token_usage(entity_id, choice_tokens, entity_type)
+                    try:
+                        deduct_for_tokens(user_id, choice_tokens, conversation_id=conversation_id)
+                    except AppError:
+                        pass
+            except Exception:
+                # If the optional second completion fails, omit the buttons;
+                # never show generic, hard-coded actions.
+                pass
 
         yield "data: [DONE]\n\n"
 

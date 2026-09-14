@@ -1,14 +1,5 @@
 """Shared writingStyle defaults and normalization — single source of truth."""
 
-DEFAULT_WRITING_STYLE = {
-    "contentMode": "nsfw",
-    "sensoryDensity": "high",
-    "pacingPreference": "slow",
-    "powerIntensity": "extreme",
-    "proseStyle": "direct",
-    "wordCount": 1500,
-}
-
 # Default STATUS schemas for immersive character state tracking
 DEFAULT_NSFW_STATUS_SCHEMA = [
     {"key": "服装", "label": "服装", "type": "text"},
@@ -37,20 +28,6 @@ DEFAULT_NORMAL_STATUS_SCHEMA = [
     {"key": "想法", "label": "想法", "type": "text"},
     {"key": "好感度", "label": "好感度", "type": "number"},
 ]
-
-
-def normalize_writing_style(ws: dict | None = None) -> dict:
-    """Apply defaults to a writingStyle dict, returning a full 6-key dict."""
-    if not ws:
-        ws = {}
-    return {
-        "contentMode": ws.get("contentMode", DEFAULT_WRITING_STYLE["contentMode"]),
-        "sensoryDensity": ws.get("sensoryDensity", DEFAULT_WRITING_STYLE["sensoryDensity"]),
-        "pacingPreference": ws.get("pacingPreference", DEFAULT_WRITING_STYLE["pacingPreference"]),
-        "powerIntensity": ws.get("powerIntensity", DEFAULT_WRITING_STYLE["powerIntensity"]),
-        "proseStyle": ws.get("proseStyle", DEFAULT_WRITING_STYLE["proseStyle"]),
-        "wordCount": ws.get("wordCount", DEFAULT_WRITING_STYLE["wordCount"]),
-    }
 
 
 def resolve_status_schema(content_mode: str, custom_schema: list | None = None,

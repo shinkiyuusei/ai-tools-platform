@@ -56,6 +56,10 @@ async function save() {
   if (!draft.value.name.trim()) return
   saving.value = true
   try {
+    // Built-in presets are read-only; saving one creates a user-owned copy.
+    if (draft.value.system) {
+      draft.value = { ...draft.value, id: null, system: false, name: `${draft.value.name} copy` }
+    }
     if (draft.value.id) await promptPresetApi.update(draft.value.id, { name: draft.value.name, preset: draft.value.preset })
     else {
       const res = await promptPresetApi.create({ name: draft.value.name, preset: draft.value.preset })
@@ -65,9 +69,9 @@ async function save() {
   } finally { saving.value = false }
 }
 
-async function setDefault() { if (draft.value?.id) { await promptPresetApi.setDefault(draft.value.id); emit('refresh') } }
+async function setDefault() { if (draft.value?.id && !draft.value.system) { await promptPresetApi.setDefault(draft.value.id); emit('refresh') } }
 async function remove() {
-  if (!draft.value?.id || !window.confirm(`确定删除“${draft.value.name}”吗？`)) return
+  if (!draft.value?.id || draft.value.system || !window.confirm(`确定删除“${draft.value.name}”吗？`)) return
   await promptPresetApi.remove(draft.value.id); createNew(); emit('select', ''); emit('refresh')
 }
 

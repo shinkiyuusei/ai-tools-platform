@@ -9,6 +9,8 @@
 import { extensionApi } from '../api/extensions.js'
 import { useToastStore } from '../stores/toast'
 
+const registeredComponents = {}
+
 /**
  * Create the sandbox API for a single extension.
  *
@@ -53,10 +55,9 @@ export function createExtensionAPI(extId, context = {}) {
     ui: {
       /** Register a component to be rendered in a hook slot. */
       registerComponent(hookName, props = {}) {
-        // Queued for the extension loader to pick up
-        window.__ext_registry = window.__ext_registry || {}
-        window.__ext_registry[extId] = window.__ext_registry[extId] || { components: [] }
-        window.__ext_registry[extId].components.push({ hookName, props })
+        const entries = registeredComponents[extId] || []
+        entries.push({ hookName, props })
+        registeredComponents[extId] = entries
       },
 
       /** Show a toast notification. */
@@ -101,4 +102,26 @@ export function createExtensionAPI(extId, context = {}) {
       },
     },
   }
+}
+
+/**
+ * The only host operations an iframe extension may request.  Keep this
+ * explicit: never use a dotted path to dynamically traverse the host API.
+ */
+export async function invokeExtensionAPI(api, method, args = []) {
+  if (!Array.isArray(args)) throw new TypeError('Extension API arguments must be an array')
+  switch (method) {
+    case 'ui.toast': return api.ui.toast(String(args[0] || ''), args[1] || 'info')
+    case 'ui.registerComponent': return api.ui.registerComponent(String(args[0] || ''), args[1] || {})
+    case 'http.get': return api.http.get(String(args[0] || ''), args[1] || {})
+    case 'http.post': return api.http.post(String(args[0] || ''), args[1], args[2] || {})
+    case 'storage.get': return api.storage.get(String(args[0] || ''))
+    case 'storage.set': return api.storage.set(String(args[0] || ''), args[1])
+    case 'config.get': return api.config.get()
+    default: throw new Error(`Unsupported extension API method: ${method}`)
+  }
+}
+
+export function getExtensionComponents(extId) {
+  return [...(registeredComponents[extId] || [])]
 }

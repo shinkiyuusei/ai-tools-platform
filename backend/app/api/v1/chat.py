@@ -11,7 +11,6 @@ from ...utils.response import success_response, page_response
 from ...core.errors import AppError, ErrorCode
 from ...services.cache import (
     get_cached_work, set_cached_work, invalidate_work,
-    cache_get, cache_set, LIST_TTL,
 )
 from ...services.chat.prompt_builder import build_enhanced_system_prompt
 from ...utils.writing_style import resolve_work_status_schemas
@@ -47,29 +46,38 @@ def _parse_json(col, default=None):
     return val if isinstance(val, (dict, list)) else default
 
 
-def _build_legacy_dict(work, role_config):
-    """Build the 'legacy' config dict consumed by prompt builders."""
+def _project_role_config(role_config):
+    """Expose one canonical client/prompt projection of a work role config."""
+    protagonist = role_config.get("protagonist_setting", {})
+    worldview = role_config.get("worldview_setting", {})
     return {
-        "author": work.get("author", ""),
-        "detailedIntro": work.get("summary", ""),
-        "opening": work.get("opening", ""),
-        "models": ["deepseek-v4-flash"],
         "characters": role_config.get("npc_settings", []),
         "protagonist": {
-            "name": role_config.get("protagonist_setting", {}).get("name", ""),
-            "description": role_config.get("protagonist_setting", {}).get("setting", ""),
-            "motivation": role_config.get("protagonist_setting", {}).get("core_motivation", ""),
+            "name": protagonist.get("name", ""),
+            "description": protagonist.get("setting", ""),
+            "motivation": protagonist.get("core_motivation", ""),
         },
         "worldSetting": {
-            "worldName": role_config.get("worldview_setting", {}).get("name", ""),
-            "eraTech": role_config.get("worldview_setting", {}).get("era_background", ""),
-            "coreConflict": role_config.get("worldview_setting", {}).get("core_conflict", ""),
-            "toneAtmosphere": role_config.get("worldview_setting", {}).get("overall_atmosphere", ""),
+            "worldName": worldview.get("name", ""),
+            "eraTech": worldview.get("era_background", ""),
+            "coreConflict": worldview.get("core_conflict", ""),
+            "toneAtmosphere": worldview.get("overall_atmosphere", ""),
             "mainPlot": role_config.get("main_plot", ""),
             "initialState": role_config.get("init_plot_status", ""),
         },
         "gameRules": role_config.get("play_rule", ""),
         "statusBar": role_config.get("status_bar", ""),
+    }
+
+
+def _build_legacy_dict(work, role_config):
+    """Build the prompt-builder input from the canonical role-config projection."""
+    return {
+        "author": work.get("author", ""),
+        "detailedIntro": work.get("summary", ""),
+        "opening": work.get("opening", ""),
+        "models": ["deepseek-v4-flash"],
+        **_project_role_config(role_config),
     }
 
 
@@ -89,14 +97,15 @@ def _build_work_data(work, perspective=None):
     if not opening_text and opening_statements:
         opening_text = opening_statements[0].get("text", "")
 
-    protagonist = role_config.get("protagonist_setting", {})
+    role_view = _project_role_config(role_config)
+    protagonist = role_view["protagonist"]
     protagonist_name = protagonist.get("name", "").strip()
     perspective_name = perspective.get("name", "").strip() if perspective else ""
     if perspective_name and perspective_name != protagonist_name:
         opening_text = ""
         opening_statements = []
 
-    return {
+    data = {
         "id": work["id"],
         "name": work_name,
         "icon": work.get("cover", ""),
@@ -112,28 +121,22 @@ def _build_work_data(work, perspective=None):
         "author": work.get("author", ""),
         "models": ["deepseek-v4-flash"],
         "detailedIntro": work.get("summary", ""),
-        "characters": role_config.get("npc_settings", []),
-        "protagonist": {
-            "name": protagonist.get("name", ""),
-            "description": protagonist.get("setting", ""),
-            "motivation": protagonist.get("core_motivation", ""),
-        },
-        "worldSetting": {
-            "worldName": role_config.get("worldview_setting", {}).get("name", ""),
-            "eraTech": role_config.get("worldview_setting", {}).get("era_background", ""),
-            "coreConflict": role_config.get("worldview_setting", {}).get("core_conflict", ""),
-            "toneAtmosphere": role_config.get("worldview_setting", {}).get("overall_atmosphere", ""),
-            "mainPlot": role_config.get("main_plot", ""),
-            "initialState": role_config.get("init_plot_status", ""),
-        },
-        "gameRules": role_config.get("play_rule", ""),
-        "statusBar": role_config.get("status_bar", ""),
+        **role_view,
         "statusSchema": resolve_work_status_schemas(
             "normal",
             role_config.get("npc_settings", []),
             role_config.get("protagonist_setting", {}),
         ),
     }
+    rating = query_one(
+        "SELECT COUNT(*) AS count, COALESCE(AVG(rating), 0) AS average FROM t_work_rating WHERE work_id = %s",
+        (work["id"],),
+    )
+    data["rating"] = {
+        "count": int((rating or {}).get("count", 0)),
+        "average": float((rating or {}).get("average", 0)),
+    }
+    return data
 
 
 def _build_work_response(work, perspective=None):
@@ -192,7 +195,6 @@ def _make_role_config(payload):
 @chat_bp.post("/chat/work/upload-cover")
 def upload_cover():
     import os, uuid
-    from werkzeug.utils import secure_filename
     from flask import current_app
 
     if 'file' not in request.files:
@@ -545,6 +547,41 @@ def get_collect_status(work_id: int):
         (user_id, work_id),
     )
     return success_response({"collected": bool(existing)})
+
+
+@chat_bp.get("/chat/work/<int:work_id>/rating")
+def get_work_rating(work_id: int):
+    user_id = _try_get_user_id()
+    summary = query_one(
+        "SELECT COUNT(*) AS count, COALESCE(AVG(rating), 0) AS average FROM t_work_rating WHERE work_id = %s",
+        (work_id,),
+    ) or {}
+    own = query_one(
+        "SELECT rating FROM t_work_rating WHERE work_id = %s AND user_id = %s",
+        (work_id, user_id),
+    ) if user_id else None
+    return success_response({
+        "count": int(summary.get("count", 0)),
+        "average": float(summary.get("average", 0)),
+        "userRating": own.get("rating") if own else None,
+    })
+
+
+@chat_bp.post("/chat/work/<int:work_id>/rating")
+@jwt_required()
+def rate_work(work_id: int):
+    user_id = int(get_jwt_identity())
+    rating = (request.get_json(silent=True) or {}).get("rating")
+    if isinstance(rating, bool) or not isinstance(rating, int) or not 1 <= rating <= 5:
+        raise AppError(ErrorCode.PARAM_INVALID, "评分必须是 1 到 5 之间的整数")
+    if not query_one("SELECT id FROM t_work_card WHERE id = %s AND status = 1", (work_id,)):
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "作品不存在或已下架")
+    execute(
+        "INSERT INTO t_work_rating (user_id, work_id, rating) VALUES (%s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE rating = VALUES(rating), update_time = NOW()",
+        (user_id, work_id, rating),
+    )
+    return get_work_rating(work_id)
 
 
 @chat_bp.get("/user/work/collected")

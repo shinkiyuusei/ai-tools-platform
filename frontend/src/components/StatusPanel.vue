@@ -1,14 +1,10 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { buildStatusCharacters } from '../utils/statusPanel'
 
 const props = defineProps({
   statusData: { type: Object, default: null },
   schema: { type: [Array, Object], default: () => ({}) },
-})
-
-// Detect single-character (schema is Array) vs multi-character (schema is Object)
-const isMultiChar = computed(() => {
-  return props.schema && !Array.isArray(props.schema)
 })
 
 // Track collapsed state per character name
@@ -19,31 +15,7 @@ watch(() => [props.schema, props.statusData], () => {
   collapsed.value = {}
 }, { deep: true })
 
-// Build list of { name, fields } entries for rendering.
-// Uses statusData keys as the primary character list (matching AI output),
-// falling back to schema keys, so name mismatches between schema and AI
-// output are handled gracefully.
-const characters = computed(() => {
-  if (!props.schema) return []
-  if (isMultiChar.value) {
-    const dataNames = props.statusData ? Object.keys(props.statusData) : []
-    const schemaNames = Object.keys(props.schema)
-    // Merge: statusData names first (AI output), then any schema-only names
-    const allNames = [...new Set([...dataNames, ...schemaNames])]
-    return allNames.map((name) => ({
-      name,
-      // Use matching schema entry if exists, otherwise fall back to any available schema
-      fields: props.schema[name] || Object.values(props.schema)[0] || [],
-      data: props.statusData?.[name] || {},
-    }))
-  }
-  // Single-character: schema = [fields], statusData = { fieldKey: value }
-  return [{
-    name: null,
-    fields: props.schema || [],
-    data: props.statusData || {},
-  }]
-})
+const characters = computed(() => buildStatusCharacters(props.schema, props.statusData))
 
 function toggleCollapse(name) {
   const key = name || '_single'
@@ -94,187 +66,163 @@ function valueClass(field, char) {
 <template>
   <div v-if="characters.length" class="status-panel">
     <template v-for="char in characters" :key="char.name || '_single'">
-      <!-- Character name header (multi-character only) — clickable to toggle collapse -->
-      <div
-        v-if="char.name"
-        class="status-char-name"
-        :class="{ collapsed: isCollapsed(char.name) }"
-        @click="toggleCollapse(char.name)"
-      >
-        <span class="collapse-arrow">{{ isCollapsed(char.name) ? '▸' : '▾' }}</span>
-        <span class="status-icon">◆</span>
-        <span>{{ char.name }}</span>
-      </div>
-      <!-- Single-character toggle header -->
-      <div
-        v-else
-        class="status-char-name single-toggle"
-        :class="{ collapsed: isCollapsed(null) }"
-        @click="toggleCollapse(null)"
-      >
-        <span class="collapse-arrow">{{ isCollapsed(null) ? '▸' : '▾' }}</span>
-        <span class="status-label-hint">状态栏</span>
-        <span class="field-count">{{ effectiveFields(char).length }} 项</span>
-      </div>
-      <!-- Fields (collapsible) -->
-      <div
-        class="status-fields"
-        :class="{ collapsed: isCollapsed(char.name) }"
-      >
-        <div
-          v-for="field in effectiveFields(char)"
-          :key="field.key"
-          class="status-field"
+      <section class="status-section">
+        <button
+          v-if="char.name"
+          type="button"
+          class="status-char-name"
+          :class="{ collapsed: isCollapsed(char.name) }"
+          @click="toggleCollapse(char.name)"
         >
-          <span class="status-label">{{ field.label }}</span>
-          <span class="status-value" :class="valueClass(field, char)">
-            {{ formatValue(field, char) }}
-          </span>
+          <span class="status-icon">◆</span>
+          <span class="character-name">{{ char.name }}</span>
+          <span class="field-count">{{ effectiveFields(char).length }} 项</span>
+          <span class="collapse-arrow">{{ isCollapsed(char.name) ? '展开' : '收起' }}</span>
+        </button>
+        <div v-else class="status-overview">
+          <span class="status-icon">◆</span>
+          <span>当前状态</span>
+          <span class="field-count">{{ effectiveFields(char).length }} 项</span>
         </div>
-      </div>
+        <div class="status-fields" :class="{ collapsed: char.name && isCollapsed(char.name) }">
+          <div v-for="field in effectiveFields(char)" :key="field.key" class="status-field">
+            <span class="status-label">{{ field.label }}</span>
+            <span class="status-value" :class="valueClass(field, char)">{{ formatValue(field, char) }}</span>
+          </div>
+        </div>
+      </section>
     </template>
   </div>
 </template>
 
 <style scoped>
 .status-panel {
-  margin-top: 10px;
-  padding: 8px 12px;
-  background: rgba(37, 37, 56, 0.5);
-  border: 1px solid var(--border-card, rgba(100, 100, 140, 0.2));
-  border-radius: var(--radius-md, 6px);
+  width: min(100%, 430px);
+  margin-top: 12px;
+  padding: 10px;
+  color: var(--text-primary, #eef0ff);
+  background: linear-gradient(145deg, rgba(37, 40, 62, 0.92), rgba(24, 26, 42, 0.92));
+  border: 1px solid rgba(151, 162, 226, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(5, 7, 20, 0.2);
   font-size: 12px;
-  max-width: 340px;
 }
 
+.status-section + .status-section { margin-top: 8px; }
+
 .status-char-name {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--text-secondary, #ccc);
-  font-size: 11px;
+  padding: 8px 9px;
+  color: #e9ebff;
+  font: inherit;
   font-weight: 600;
-  letter-spacing: 0.5px;
-  margin-top: 6px;
-  margin-bottom: 4px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+  background: rgba(116, 125, 188, 0.13);
+  border: 1px solid rgba(152, 163, 232, 0.16);
+  border-radius: 8px;
   cursor: pointer;
   user-select: none;
-  transition: color var(--transition-fast, 0.15s);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .status-char-name:hover {
-  color: var(--text-primary, #eee);
+  background: rgba(128, 141, 211, 0.22);
+  border-color: rgba(164, 176, 249, 0.3);
 }
 
-.status-char-name.collapsed {
-  border-bottom-color: transparent;
-  margin-bottom: 0;
-}
-
-.status-char-name:first-child {
-  margin-top: 0;
-}
-
-/* Single-character toggle header */
-.status-char-name.single-toggle {
-  font-weight: 500;
-  font-size: 10px;
-  color: var(--text-tertiary, #888);
-  margin-top: 0;
-  margin-bottom: 4px;
-}
-
-.status-char-name.single-toggle.collapsed {
-  margin-bottom: 0;
-  border-bottom-color: transparent;
+.status-overview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 2px 9px;
+  color: #e9ebff;
+  font-weight: 600;
 }
 
 .collapse-arrow {
-  font-size: 10px;
-  color: var(--text-tertiary, #888);
-  transition: transform var(--transition-fast, 0.15s);
-  flex-shrink: 0;
-  width: 10px;
-  text-align: center;
-}
-
-.status-char-name:hover .collapse-arrow {
-  color: var(--text-primary, #eee);
-}
-
-.status-label-hint {
-  color: var(--text-tertiary, #888);
+  margin-left: 4px;
+  color: #9ea6d5;
+  font-size: 11px;
   font-weight: 400;
 }
+
+.character-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .field-count {
-  font-weight: 400;
-  color: var(--text-tertiary, #888);
-  font-size: 10px;
   margin-left: auto;
+  color: #9ea6d5;
+  font-size: 10px;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .status-icon {
-  color: var(--color-candy-pink-soft, #e895a8);
-  font-size: 8px;
+  color: #aeb9ff;
+  font-size: 9px;
 }
 
 .status-fields {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 2px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 7px;
   overflow: hidden;
-  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.2s ease;
-  max-height: 600px;
+  transition: max-height 0.22s ease, opacity 0.16s ease, margin 0.16s ease;
+  max-height: 800px;
   opacity: 1;
 }
 
 .status-fields.collapsed {
   max-height: 0;
   opacity: 0;
-  margin-bottom: 0;
+  margin-top: 0;
 }
 
 .status-field {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 2px 0;
-  gap: 12px;
-}
-
-.status-field:not(:last-child) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  min-width: 0;
+  padding: 7px 8px;
+  background: rgba(8, 10, 24, 0.26);
+  border: 1px solid rgba(151, 162, 226, 0.1);
+  border-radius: 7px;
 }
 
 .status-label {
-  color: var(--text-tertiary, #888);
-  flex-shrink: 0;
+  display: block;
+  margin-bottom: 3px;
+  color: #9ea6d5;
+  font-size: 10px;
   white-space: nowrap;
 }
 
 .status-value {
-  text-align: right;
+  display: block;
+  color: #e7e9f8;
+  line-height: 1.45;
   word-break: break-word;
 }
 
 .status-value.text {
-  color: var(--text-secondary, #aaa);
+  color: #e7e9f8;
 }
 
 .status-value.number {
-  color: var(--color-candy-pink-soft, #e895a8);
+  color: #c8d0ff;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
 
 .status-value.number.up {
-  color: #7ecb8a;
+  color: #82d5a0;
 }
 
 .status-value.number.down {
-  color: #e895a8;
+  color: #ff9bad;
+}
+
+@media (max-width: 420px) {
+  .status-fields { grid-template-columns: 1fr; }
 }
 </style>

@@ -1,8 +1,9 @@
 from flask import jsonify
+from ..services.i18n import localize_api_message
 
 
 def success_response(data=None, message="success", code=0, http_status=200):
-    return jsonify({"code": code, "message": message, "data": data}), http_status
+    return jsonify({"code": code, "message": localize_api_message(message), "data": data}), http_status
 
 
 def page_response(items, total, page_num, page_size, message="success"):

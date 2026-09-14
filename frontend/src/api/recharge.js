@@ -8,6 +8,3 @@ export const createRechargeOrder = (data) => http.post('/recharge/create', data)
 
 /** 查询单个订单详情 */
 export const getRechargeOrder = (orderId) => http.get(`/recharge/order/${orderId}`)
-
-/** 查询订单列表 */
-export const getRechargeOrders = (params) => http.get('/recharge/orders', { params })

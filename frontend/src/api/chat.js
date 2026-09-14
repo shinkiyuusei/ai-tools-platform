@@ -10,18 +10,6 @@ export const chatApi = {
   getWorks(params) {
     return http.get('/chat/works', { params })
   },
-  sendMessage({ messages, systemPrompt, model, thinkingMode = false, reasoningEffort = 'medium', sceneContext, conversationId, aiProvider }) {
-    return http.post('/ai/chat/completions', {
-      messages,
-      systemPrompt,
-      model,
-      thinkingMode,
-      reasoningEffort,
-      sceneContext,
-      conversationId,
-      aiProvider: aiProvider || 'deepseek',
-    })
-  },
   async uploadCover(file) {
     const formData = new FormData()
     formData.append('file', file)
@@ -54,11 +42,14 @@ export const chatApi = {
   getCollectStatus(workId) {
     return http.get(`/chat/work/${workId}/collect`)
   },
+  getWorkRating(workId) {
+    return http.get(`/chat/work/${workId}/rating`)
+  },
+  rateWork(workId, rating) {
+    return http.post(`/chat/work/${workId}/rating`, { rating })
+  },
   getCollectedWorks(params) {
     return http.get('/user/work/collected', { params })
-  },
-  updateWorkConfig(workId, config) {
-    return http.put(`/chat/work/${workId}/config`, config)
   },
   getMyWorks(params) {
     return http.get('/user/work/my', { params })
