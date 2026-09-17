@@ -42,6 +42,8 @@
   --bg-input: #1a1a28;
   --bg-overlay: rgba(0, 0, 0, 0.65);
   --bg-glass: rgba(20, 20, 32, 0.85);
+  --bg-page-glow: rgba(123, 156, 191, 0.11);
+  --surface-raised: rgba(255, 255, 255, 0.035);
 
   /* 文字色 · Text Colors */
   --text-primary: #f0ebe3;
@@ -73,6 +75,7 @@
   --radius-lg: 16px;
   --radius-xl: 24px;
   --radius-full: 9999px;
+  --radius-control: 12px;
 
   /* 间距 · Spacing */
   --space-xs: 4px;
@@ -119,7 +122,7 @@
 
   /* 布局 · Layout */
   --sidebar-width: 230px;
-  --max-content-width: 1280px;
+  --max-content-width: 1360px;
 }
 
 /* --- Reset & Base --- */
@@ -142,7 +145,10 @@ body {
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   color: var(--text-primary);
-  background: var(--bg-primary);
+  background:
+    radial-gradient(900px 480px at 88% -10%, var(--bg-page-glow), transparent 58%),
+    radial-gradient(650px 420px at -8% 18%, rgba(238, 162, 180, 0.055), transparent 62%),
+    var(--bg-primary);
   min-width: 320px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -167,12 +173,32 @@ button {
   background: none;
 }
 
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
 input,
 textarea,
 select {
   font-family: inherit;
   font-size: inherit;
   color: inherit;
+}
+
+input:not([type='checkbox']):not([type='radio']),
+textarea,
+select {
+  min-height: 42px;
+  border-radius: var(--radius-control);
+}
+
+textarea {
+  min-height: 96px;
+  line-height: 1.6;
 }
 
 img {
@@ -239,6 +265,75 @@ p {
   border: 1px solid var(--border-primary);
 }
 
+/* Shared UI polish.  These selectors intentionally cover the page families that
+   have their own scoped CSS, keeping the visual system coherent as new screens
+   are added without changing their business logic. */
+.page,
+.explore-page {
+  animation: pageEnter 420ms ease-out both;
+}
+
+.page-header,
+.header-row {
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.empty-state,
+.empty,
+.error-state,
+.loading-state {
+  border: 1px dashed var(--border-primary);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, var(--surface-raised), transparent);
+}
+
+.table-wrap,
+.provider-card,
+.status-panel,
+.modal-content,
+.modal-card,
+.dialog,
+.dialog-panel,
+.preset-dialog {
+  box-shadow: var(--shadow-md);
+}
+
+.table-wrap,
+.provider-card,
+.status-panel {
+  border-color: var(--border-card);
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+}
+
+.table-wrap {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+td {
+  vertical-align: middle;
+}
+
+.modal-overlay,
+.dialog-overlay,
+.dialog-mask,
+.preset-mask {
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
 /* --- Utility: Gradient Text --- */
 .gradient-text-misty {
   background: linear-gradient(135deg, var(--color-misty-blue), var(--color-misty-blue-soft));
@@ -301,6 +396,11 @@ p {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes shimmer {
@@ -377,6 +477,8 @@ p {
   --bg-input: #eeebe5;
   --bg-overlay: rgba(0, 0, 0, 0.35);
   --bg-glass: rgba(255, 255, 255, 0.88);
+  --bg-page-glow: rgba(123, 156, 191, 0.16);
+  --surface-raised: rgba(255, 255, 255, 0.7);
 
   --text-primary: #1a1a24;
   --text-secondary: #4a4640;
@@ -411,6 +513,45 @@ p {
 
 :root.light .skeleton {
   background: linear-gradient(90deg, #e8e4dd 25%, #f0ebe3 50%, #e8e4dd 75%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 640px) {
+  h1 { font-size: clamp(24px, 7vw, 30px); }
+  h2 { font-size: 22px; }
+
+  .page-header,
+  .header-row {
+    gap: var(--space-sm);
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .form-row,
+  .form-grid {
+    grid-template-columns: 1fr !important;
+    flex-direction: column;
+  }
+
+  .modal-content,
+  .modal-card,
+  .dialog,
+  .dialog-panel,
+  .preset-dialog {
+    width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 32px);
+    border-radius: 18px;
+  }
 }
 
 /* Light theme scrollbar */

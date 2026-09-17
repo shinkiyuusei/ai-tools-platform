@@ -28,6 +28,7 @@ export const deleteAiProvider = (id) => http.delete(`/admin/ai-provider/${id}`)
 export const testAiProvider = (id) => http.post(`/admin/ai-provider/${id}/test`)
 export const testAiProviderDraft = (data) => http.post('/admin/ai-provider/test-connection', data)
 export const fetchAiModels = (id) => http.post(`/admin/ai-provider/${id}/fetch-models`)
+export const batchUpdateAiModels = (providerId, data) => http.post(`/admin/ai-provider/${providerId}/models/batch`, data)
 
 export const createAiModel = (data) => http.post('/admin/ai-model', data)
 export const updateAiModel = (id, data) => http.put(`/admin/ai-model/${id}`, data)

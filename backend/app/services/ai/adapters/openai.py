@@ -72,7 +72,10 @@ class OpenAIAdapter(ChatAdapter):
             ) from exc
 
         total_tokens = 0
-        for line in response.iter_lines():
+        # requests defaults to 512 bytes here, which batches several upstream
+        # SSE events before the browser can receive them. Read immediately so
+        # each provider event can be forwarded as soon as it arrives.
+        for line in response.iter_lines(chunk_size=1):
             if not line:
                 continue
             line = line.decode("utf-8").strip()

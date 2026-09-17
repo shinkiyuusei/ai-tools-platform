@@ -70,7 +70,8 @@ class GeminiAdapter(ChatAdapter):
             ) from exc
 
         total_tokens = 0
-        for line in response.iter_lines():
+        # Avoid requests' default 512-byte SSE buffering.
+        for line in response.iter_lines(chunk_size=1):
             if not line:
                 continue
             line = line.decode("utf-8").strip()

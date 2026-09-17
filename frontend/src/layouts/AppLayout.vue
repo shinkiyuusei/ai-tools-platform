@@ -226,11 +226,26 @@ onBeforeUnmount(() => {
       </aside>
 
       <div class="layout-main">
-        <main class="main-content">
+        <main
+          class="main-content"
+          :class="{ 'main-content--immersive': route.name === 'chat' || route.name === 'character-chat' }"
+        >
           <slot />
         </main>
       </div>
     </div>
+
+    <nav class="mobile-nav" aria-label="主导航">
+      <RouterLink to="/explore" class="mobile-nav-item" :class="{ active: route.path.startsWith('/explore') }">
+        <span>发现</span>
+      </RouterLink>
+      <RouterLink to="/create" class="mobile-nav-item mobile-nav-item--create" :class="{ active: route.path === '/create' }">
+        <span>开始创作</span>
+      </RouterLink>
+      <RouterLink :to="auth.isLoggedIn() ? '/usercenter' : '/login'" class="mobile-nav-item" :class="{ active: route.path.startsWith('/usercenter') }">
+        <span>{{ auth.isLoggedIn() ? '我的' : '登录' }}</span>
+      </RouterLink>
+    </nav>
 
     <!-- Toast 消息堆叠 -->
     <TransitionGroup name="toast" tag="div" class="toast-stack">
@@ -268,13 +283,13 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border-secondary);
-  height: 56px;
+  height: 64px;
 }
 
 .top-nav-inner {
   max-width: var(--max-content-width);
   margin: 0 auto;
-  padding: 0 var(--space-xl);
+  padding: 0 clamp(16px, 3vw, 40px);
   height: 100%;
   display: flex;
   align-items: center;
@@ -325,7 +340,7 @@ onBeforeUnmount(() => {
 .top-nav-link.active {
   color: var(--text-primary);
   background: rgba(123, 156, 191, 0.1);
-  border-bottom: 2px solid var(--color-misty-blue-soft);
+  box-shadow: inset 0 -2px 0 var(--color-misty-blue-soft);
 }
 
 .top-nav-right {
@@ -444,19 +459,19 @@ onBeforeUnmount(() => {
 /* --- Layout Body --- */
 .layout-body {
   display: flex;
-  min-height: calc(100vh - 56px);
+  min-height: calc(100vh - 64px);
 }
 
 /* --- Sidebar --- */
 .sidebar {
   width: var(--sidebar-width);
-  min-height: calc(100vh - 56px);
-  background: var(--bg-secondary);
+  min-height: calc(100vh - 64px);
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
   border-right: 1px solid var(--border-secondary);
   display: flex;
   flex-direction: column;
   position: sticky;
-  top: 0;
+  top: 64px;
   flex-shrink: 0;
   transition: width var(--transition-base);
   z-index: var(--z-sidebar);
@@ -798,8 +813,18 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: var(--max-content-width);
   margin: 0 auto;
-  padding: var(--space-lg) var(--space-xl) var(--space-3xl);
+  padding: clamp(20px, 3vw, 36px) clamp(18px, 3vw, 40px) 72px;
 }
+
+/* Chat benefits from using the available canvas on wide displays.  Other views
+   keep the more readable, editorial-width content column above. */
+.main-content--immersive {
+  max-width: 1680px;
+  padding-left: var(--space-lg);
+  padding-right: var(--space-lg);
+}
+
+.mobile-nav { display: none; }
 
 /* --- Toast Stack --- */
 .toast-stack {
@@ -889,8 +914,10 @@ onBeforeUnmount(() => {
 
 /* --- Responsive --- */
 @media (max-width: 768px) {
+  .top-nav-bar { height: 56px; }
+
   .sidebar {
-    width: 64px;
+    display: none;
   }
 
   .sidebar .brand-text,
@@ -923,14 +950,53 @@ onBeforeUnmount(() => {
   }
 
   .main-content {
-    padding: var(--space-md) var(--space-md) var(--space-2xl);
+    padding: var(--space-md) var(--space-md) 92px;
   }
 
   .top-nav-inner {
     padding: 0 var(--space-md);
   }
 
+  .top-nav-links { display: none; }
+  .top-brand .brand-text { font-size: var(--text-lg); }
+  .user-name-link, .nav-logout-btn, .user-points { display: none; }
+  .top-auth-btn { padding: 6px 10px; }
+  .top-auth-btn:not(.top-auth-btn--primary) { display: none; }
+
   .locale-switcher { display: none; }
   .top-nav-right { gap: 4px; }
+
+  .mobile-nav {
+    position: fixed;
+    z-index: var(--z-header);
+    left: 12px;
+    right: 12px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    height: 58px;
+    display: grid;
+    grid-template-columns: 1fr 1.25fr 1fr;
+    align-items: center;
+    gap: 4px;
+    padding: 5px;
+    background: color-mix(in srgb, var(--bg-glass) 92%, transparent);
+    border: 1px solid var(--border-primary);
+    border-radius: 18px;
+    box-shadow: var(--shadow-xl);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .mobile-nav-item {
+    min-height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+
+  .mobile-nav-item.active { color: var(--text-primary); background: var(--bg-elevated); }
+  .mobile-nav-item--create { color: #fff; background: linear-gradient(135deg, var(--color-misty-blue-deep), var(--color-dark-green)); }
 }
 </style>

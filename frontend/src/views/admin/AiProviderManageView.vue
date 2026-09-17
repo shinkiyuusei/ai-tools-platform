@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 
 import {
+  batchUpdateAiModels,
   createAiModel,
   createAiProvider,
   deleteAiModel,
@@ -60,6 +61,9 @@ const modelForm = reactive({
 const isModelEdit = ref(false)
 
 const busyId = ref(null)   // provider id currently testing/fetching
+const batchingProviderId = ref(null)
+const collapsedProviderIds = ref(new Set())
+const selectedModelIds = ref({})
 const toast = ref('')
 
 function flash(msg) {
@@ -72,6 +76,7 @@ async function fetchList() {
   try {
     const res = await getAiProviderList()
     list.value = res.data.list
+    selectedModelIds.value = {}
   } finally {
     loading.value = false
   }
@@ -226,6 +231,56 @@ async function handleDeleteModel(id) {
   fetchList()
 }
 
+function isModelsCollapsed(providerId) {
+  return collapsedProviderIds.value.has(providerId)
+}
+
+function toggleModels(providerId) {
+  const next = new Set(collapsedProviderIds.value)
+  next.has(providerId) ? next.delete(providerId) : next.add(providerId)
+  collapsedProviderIds.value = next
+}
+
+function selectedFor(providerId) {
+  return selectedModelIds.value[providerId] || []
+}
+
+function isModelSelected(providerId, modelId) {
+  return selectedFor(providerId).includes(modelId)
+}
+
+function toggleModelSelection(providerId, modelId) {
+  const selected = new Set(selectedFor(providerId))
+  selected.has(modelId) ? selected.delete(modelId) : selected.add(modelId)
+  selectedModelIds.value = { ...selectedModelIds.value, [providerId]: [...selected] }
+}
+
+function allModelsSelected(provider) {
+  return provider.models?.length > 0 && selectedFor(provider.id).length === provider.models.length
+}
+
+function toggleAllModels(provider) {
+  const modelIds = allModelsSelected(provider) ? [] : provider.models.map((model) => model.id)
+  selectedModelIds.value = { ...selectedModelIds.value, [provider.id]: modelIds }
+}
+
+async function handleBatchModelAction(provider, action) {
+  const modelIds = selectedFor(provider.id)
+  if (!modelIds.length) return
+
+  const labels = { activate: '启用', deactivate: '停用', delete: '删除' }
+  if (!confirm(`确认${labels[action]}已选中的 ${modelIds.length} 个模型吗？`)) return
+
+  batchingProviderId.value = provider.id
+  try {
+    const res = await batchUpdateAiModels(provider.id, { modelIds, action })
+    flash(`已${labels[action]} ${res.data.count} 个模型`)
+    await fetchList()
+  } finally {
+    batchingProviderId.value = null
+  }
+}
+
 onMounted(fetchList)
 </script>
 
@@ -264,27 +319,44 @@ onMounted(fetchList)
           <div><span class="meta-label">API Key</span><code>{{ p.apiKeyMasked || '(未设置)' }}</code></div>
         </div>
 
-        <table v-if="p.models?.length" class="model-table">
-          <thead>
-            <tr>
-              <th>modelId</th><th>展示名</th><th>默认</th><th>状态</th><th>排序</th><th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="m in p.models" :key="m.id">
-              <td><code>{{ m.modelId }}</code></td>
-              <td>{{ m.displayName }}</td>
-              <td>{{ m.isDefault ? '★' : '' }}</td>
-              <td>{{ m.isActive ? '启用' : '停用' }}</td>
-              <td>{{ m.sortOrder }}</td>
-              <td>
-                <button class="action-btn" @click="openEditModel(m, p.id)">编辑</button>
-                <button class="action-btn danger" @click="handleDeleteModel(m.id)">删除</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-else class="empty-inline">暂无模型，可点上方「拉取模型」从上游自动获取</div>
+        <div class="model-section-header">
+          <button class="model-collapse-btn" :aria-expanded="!isModelsCollapsed(p.id)" @click="toggleModels(p.id)">
+            <span>模型（{{ p.models?.length || 0 }}）</span>
+            <span>{{ isModelsCollapsed(p.id) ? '展开' : '收起' }}</span>
+          </button>
+          <div v-if="p.models?.length && !isModelsCollapsed(p.id)" class="batch-actions">
+            <span class="selection-count">已选 {{ selectedFor(p.id).length }} 个</span>
+            <button class="action-btn" :disabled="!selectedFor(p.id).length || batchingProviderId === p.id" @click="handleBatchModelAction(p, 'activate')">批量启用</button>
+            <button class="action-btn" :disabled="!selectedFor(p.id).length || batchingProviderId === p.id" @click="handleBatchModelAction(p, 'deactivate')">批量停用</button>
+            <button class="action-btn danger" :disabled="!selectedFor(p.id).length || batchingProviderId === p.id" @click="handleBatchModelAction(p, 'delete')">批量删除</button>
+          </div>
+        </div>
+
+        <div v-if="!isModelsCollapsed(p.id)" class="models-panel">
+          <table v-if="p.models?.length" class="model-table">
+            <thead>
+              <tr>
+                <th class="model-select-cell"><input type="checkbox" :checked="allModelsSelected(p)" :aria-label="`选择 ${p.name} 的全部模型`" @change="toggleAllModels(p)" /></th>
+                <th>modelId</th><th>展示名</th><th>默认</th><th>状态</th><th>排序</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in p.models" :key="m.id" :class="{ selected: isModelSelected(p.id, m.id) }">
+                <td class="model-select-cell"><input type="checkbox" :checked="isModelSelected(p.id, m.id)" :aria-label="`选择模型 ${m.modelId}`" @change="toggleModelSelection(p.id, m.id)" /></td>
+                <td><code>{{ m.modelId }}</code></td>
+                <td>{{ m.displayName }}</td>
+                <td>{{ m.isDefault ? '✓' : '' }}</td>
+                <td>{{ m.isActive ? '启用' : '停用' }}</td>
+                <td>{{ m.sortOrder }}</td>
+                <td>
+                  <button class="action-btn" @click="openEditModel(m, p.id)">编辑</button>
+                  <button class="action-btn danger" @click="handleDeleteModel(m.id)">删除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-else class="empty-inline">暂无模型，可点击上方“拉取模型”从上游自动获取</div>
+        </div>
 
         <div class="model-add-row">
           <BaseButton variant="secondary" @click="openCreateModel(p.id)">+ 手动添加模型</BaseButton>
@@ -392,11 +464,27 @@ onMounted(fetchList)
   padding: var(--space-xl);
 }
 
+/* Keep this dense administration screen in its familiar, utilitarian style. */
+.page {
+  animation: none;
+}
+
+.page :deep(.base-button) {
+  min-height: 0;
+}
+
+.page :deep(.base-input) {
+  min-height: 0;
+  border-radius: var(--radius-md);
+}
+
 .header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--space-lg);
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .header-row h1 {
@@ -422,6 +510,8 @@ onMounted(fetchList)
   border-radius: var(--radius-md);
   padding: 16px;
   margin-bottom: 16px;
+  background: transparent;
+  box-shadow: none;
 }
 
 .provider-head {
@@ -509,6 +599,57 @@ onMounted(fetchList)
   font-weight: 600;
 }
 
+.model-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin: 14px 0 8px;
+}
+
+.model-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.model-collapse-btn span:last-child {
+  color: var(--color-misty-blue-soft);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.selection-count {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.model-select-cell {
+  width: 32px;
+  text-align: center !important;
+}
+
+.model-select-cell input {
+  cursor: pointer;
+  accent-color: var(--color-misty-blue-deep);
+}
+
+.model-table tbody tr.selected {
+  background: rgba(123, 156, 191, 0.08);
+}
+
 .empty-inline {
   color: var(--text-tertiary);
   padding: 12px 0;
@@ -540,6 +681,9 @@ onMounted(fetchList)
   text-align: center;
   padding: var(--space-3xl);
   color: var(--text-tertiary);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .dialog-overlay {
@@ -559,6 +703,7 @@ onMounted(fetchList)
   padding: var(--space-xl);
   width: 480px;
   max-width: 90vw;
+  box-shadow: none;
 }
 
 .dialog h2 {
@@ -604,6 +749,7 @@ onMounted(fetchList)
   border: 1px solid var(--border-card);
   border-radius: 4px;
   color: inherit;
+  min-height: 0;
 }
 
 .checkbox {
@@ -621,10 +767,21 @@ onMounted(fetchList)
   margin-top: var(--space-lg);
 }
 
+.dialog-overlay {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.2s;
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+@media (max-width: 640px) {
+  .model-section-header { align-items: flex-start; flex-direction: column; }
+  .batch-actions { justify-content: flex-start; }
+  .provider-actions { flex-wrap: wrap; }
 }
 </style>

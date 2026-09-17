@@ -73,14 +73,15 @@ const handleLogin = async () => {
 .auth-page {
   max-width: 420px;
   margin: 0 auto;
-  padding-top: var(--space-3xl);
+  padding-top: clamp(48px, 10vh, 112px);
 }
 
 .auth-card {
-  background: var(--bg-card);
+  background: linear-gradient(145deg, var(--bg-card), color-mix(in srgb, var(--bg-card) 86%, var(--color-misty-blue-deep)));
   border-radius: var(--radius-xl);
   border: 1px solid var(--border-card);
   padding: var(--space-2xl) var(--space-xl);
+  box-shadow: var(--shadow-xl), var(--shadow-glow-misty);
 }
 
 .auth-header {

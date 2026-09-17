@@ -30,7 +30,8 @@ defineProps({
   border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  min-height: 40px;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -44,6 +45,7 @@ defineProps({
   padding: 6px 14px;
   font-size: var(--text-xs);
   border-radius: var(--radius-sm);
+  min-height: 32px;
 }
 
 .base-button--md {
@@ -70,6 +72,10 @@ defineProps({
 .base-button--primary:hover:not(:disabled) {
   box-shadow: 0 4px 16px rgba(123, 156, 191, 0.35);
   transform: translateY(-1px);
+}
+
+.base-button:active:not(:disabled) {
+  transform: translateY(1px) !important;
 }
 
 .base-button--secondary {

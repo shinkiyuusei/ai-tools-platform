@@ -81,6 +81,74 @@ const openDetail = async (row) => {
   } catch { /* */ }
 }
 
+const makeWorkPayload = (data) => {
+  const source = data.card && typeof data.card === 'object' ? data.card : data
+  const payload = {}
+
+  const directFields = ['name', 'cover', 'desc', 'author', 'summary', 'language', 'status', 'useCount', 'tags', 'content', 'writingStyle']
+  directFields.forEach((field) => {
+    if (source[field] !== undefined) payload[field] = source[field]
+  })
+
+  if (source.category !== undefined) payload.category = source.category
+  else if (source.categoryId !== undefined) payload.category = source.categoryId
+
+  if (source.roleConfig !== undefined) payload.roleConfig = source.roleConfig
+  else if (source.role_config !== undefined) payload.roleConfig = source.role_config
+
+  if (source.openingStatements !== undefined) payload.openingStatements = source.openingStatements
+  else if (source.openings !== undefined) payload.openingStatements = source.openings
+
+  return payload
+}
+
+const exportWork = async (row) => {
+  try {
+    const res = await getWorkAdmin(row.id)
+    const payload = makeWorkPayload(res.data)
+    const exported = {
+      format: 'ai-tools-platform-work-card',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      card: payload,
+    }
+    const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${(payload.name || `work-${row.id}`).replace(/[\\/:*?"<>|]/g, '_')}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    alert('导出作品卡失败，请重试')
+  }
+}
+
+const importWork = async (row, event) => {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  try {
+    const imported = JSON.parse(await file.text())
+    if (!imported || typeof imported !== 'object' || Array.isArray(imported)) {
+      throw new Error('invalid JSON object')
+    }
+    const payload = makeWorkPayload(imported)
+    if (!Object.keys(payload).length) {
+      throw new Error('no editable fields')
+    }
+    if (payload.roleConfig !== undefined && (typeof payload.roleConfig !== 'object' || payload.roleConfig === null || Array.isArray(payload.roleConfig))) {
+      throw new Error('invalid roleConfig')
+    }
+    await updateWorkAdmin(row.id, payload)
+    await fetchList()
+    alert(`已导入并更新作品卡：${row.name}`)
+  } catch {
+    alert('导入失败：请选择有效的作品卡 JSON 文件')
+  }
+}
+
 const handleSave = async () => {
   let advanced
   try {
@@ -176,6 +244,11 @@ onMounted(fetchList)
               </td>
               <td class="actions-cell">
                 <BaseButton size="small" @click="openDetail(row)">编辑</BaseButton>
+                <BaseButton size="small" @click="exportWork(row)">导出 JSON</BaseButton>
+                <label class="import-button">
+                  导入 JSON
+                  <input type="file" accept="application/json,.json" @change="importWork(row, $event)" />
+                </label>
                 <BaseButton size="small" class="btn-del" @click="handleDelete(row)">删除</BaseButton>
               </td>
             </tr>
@@ -323,6 +396,9 @@ th { background: var(--bg-elevated); font-weight: 600; color: var(--text-seconda
 .desc-cell { max-width: 240px; overflow: hidden; text-overflow: ellipsis; color: var(--text-tertiary); }
 .cover-thumb { width: 40px; height: 40px; border-radius: 4px; object-fit: cover; }
 .actions-cell { display: flex; gap: 6px; }
+.import-button { display: inline-flex; align-items: center; padding: 5px 10px; border: 1px solid var(--border-input); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; line-height: 1.2; cursor: pointer; }
+.import-button:hover { border-color: var(--color-misty-blue-soft); color: var(--color-misty-blue-soft); }
+.import-button input { display: none; }
 .status-tag { display: inline-block; padding: 2px 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; }
 .status-tag.on { background: rgba(76, 175, 142, 0.15); color: #4caf8e; }
 .status-tag.off { background: rgba(200, 85, 84, 0.15); color: #c85554; }

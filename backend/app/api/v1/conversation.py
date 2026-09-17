@@ -4,7 +4,7 @@ from flask import Blueprint, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from ...core.errors import AppError, ErrorCode
-from ...utils.mysql import execute, query_all, query_one
+from ...utils.mysql import execute, query_all, query_one, transaction
 from ...utils.response import success_response
 from ...utils.snowflake import generate_id
 
@@ -122,6 +122,48 @@ def add_messages(conv_id: int):
         )
 
     return success_response({"saved": saved})
+
+
+@conv_bp.put("/conversation/<int:conv_id>/messages")
+@jwt_required()
+def replace_messages(conv_id: int):
+    """Replace a conversation's transcript after an edit, deletion, or reroll."""
+    user_id = int(get_jwt_identity())
+    conv = query_one(
+        "SELECT id FROM t_conversation WHERE id = %s AND user_id = %s AND is_delete = 0",
+        (conv_id, user_id),
+    )
+    if not conv:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, "对话不存在")
+
+    payload = request.get_json(silent=True) or {}
+    msgs = payload.get("messages")
+    if not isinstance(msgs, list):
+        raise AppError(ErrorCode.PARAM_INVALID, "messages 必须是数组")
+
+    normalized = []
+    for message in msgs:
+        if not isinstance(message, dict):
+            raise AppError(ErrorCode.PARAM_INVALID, "消息格式不合法")
+        role = (message.get("role") or "").strip()
+        content = str(message.get("content") or "").strip()
+        if role not in ("user", "assistant") or not content:
+            raise AppError(ErrorCode.PARAM_INVALID, "消息角色或内容不合法")
+        normalized.append((generate_id(), conv_id, role, content))
+
+    with transaction() as cur:
+        cur.execute("DELETE FROM t_message WHERE conversation_id = %s", (conv_id,))
+        if normalized:
+            cur.executemany(
+                "INSERT INTO t_message (id, conversation_id, role, content) VALUES (%s,%s,%s,%s)",
+                normalized,
+            )
+        cur.execute(
+            "UPDATE t_conversation SET message_count = %s, update_time = NOW() WHERE id = %s",
+            (len(normalized), conv_id),
+        )
+
+    return success_response({"saved": len(normalized)})
 
 
 @conv_bp.get("/conversations")

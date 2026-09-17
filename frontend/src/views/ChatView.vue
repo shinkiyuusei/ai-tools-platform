@@ -9,6 +9,7 @@ import { formatTokens } from '../utils/format'
 import { extractStatusSection } from '../utils/messageRenderer'
 import { extractSceneContext, parseChoices, renderChatContent } from '../utils/chatPresentation'
 import { providerDisplayName } from '../utils/aiProvider'
+import { routeEntityId } from '../utils/routeEntityId'
 import StatusPanel from '../components/StatusPanel.vue'
 import { useChatSession } from '../composables/useChatSession'
 import { usePromptPresets } from '../composables/usePromptPresets'
@@ -16,7 +17,7 @@ import PromptPresetManager from '../components/PromptPresetManager.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
-const workId = Number(route.params.workId)
+const workId = routeEntityId(route.params.workId)
 
 const work = ref(null)
 const loading = ref(true)
@@ -53,6 +54,7 @@ const {
   newConversation,
   deleteConversation,
   saveMessages,
+  replaceMessages,
   appendUserMessage,
   appendAssistantMessage,
   stopStream,
@@ -74,6 +76,8 @@ const {
 // ---- Opening tooltip ----
 const tooltipText = ref('')
 const tooltipPos = ref({ x: 0, y: 0 })
+const editingIndex = ref(null)
+const editText = ref('')
 
 function showTooltip(e, text) {
   const rect = e.currentTarget.getBoundingClientRect()
@@ -190,7 +194,7 @@ const onPerspectiveChange = async () => {
 }
 
 
-const doStreamSend = (msgList) => {
+const doStreamSend = (msgList, { replaceOnDone = false } = {}) => {
   const sys = applyPreset(work.value?.systemPrompt || '', { char: work.value?.name })
   const rxMsg = appendAssistantMessage({ streaming: true })
   sending.value = true
@@ -219,7 +223,8 @@ const doStreamSend = (msgList) => {
     sending.value = false
     activeStream.value = null
     scrollToBottom()
-    await saveMessages()
+    if (replaceOnDone) await replaceMessages()
+    else await saveMessages()
     loadConversationList()
     loadActiveLore()
     auth.refreshCredits()
@@ -244,6 +249,66 @@ const sendMessage = async () => {
   appendUserMessage(text)
   await ensureConversation()
   doStreamSend(messages.value)
+}
+
+const refreshSceneContext = () => {
+  sceneContext.value = null
+  for (const message of messages.value) {
+    if (message.role === 'assistant') {
+      sceneContext.value = extractSceneContext(message.content, work.value, sceneContext.value)
+    }
+  }
+}
+
+const beginEdit = (idx) => {
+  if (sending.value) return
+  editingIndex.value = idx
+  editText.value = messages.value[idx].content
+}
+
+const cancelEdit = () => {
+  editingIndex.value = null
+  editText.value = ''
+}
+
+const saveEdit = async (idx) => {
+  const content = editText.value.trim()
+  if (!content || sending.value) return
+  const message = messages.value[idx]
+  const previous = message.content
+  message.content = content
+  message.choices = message.role === 'assistant' ? parseChoices(content) : []
+  message.statusData = message.role === 'assistant' ? extractStatusSection(content) : null
+  refreshSceneContext()
+  cancelEdit()
+  try {
+    await replaceMessages()
+  } catch {
+    message.content = previous
+    message.choices = message.role === 'assistant' ? parseChoices(previous) : []
+    message.statusData = message.role === 'assistant' ? extractStatusSection(previous) : null
+    refreshSceneContext()
+  }
+}
+
+const deleteMessage = async (idx) => {
+  if (sending.value || !window.confirm('确定删除这条消息吗？')) return
+  const [removed] = messages.value.splice(idx, 1)
+  refreshSceneContext()
+  try {
+    await replaceMessages()
+  } catch {
+    messages.value.splice(idx, 0, removed)
+    refreshSceneContext()
+  }
+}
+
+const rerollMessage = (idx) => {
+  const message = messages.value[idx]
+  if (sending.value || message?.role !== 'assistant' || idx !== messages.value.length - 1) return
+  messages.value.splice(idx, 1)
+  refreshSceneContext()
+  doStreamSend(messages.value, { replaceOnDone: true })
 }
 
 const useOpening = async (text) => {
@@ -391,7 +456,14 @@ onMounted(async () => {
           <div v-for="(msg, idx) in messages" :key="idx" :class="['message', msg.role]">
             <div class="msg-avatar">{{ msg.role === 'user' ? '我' : 'AI' }}</div>
             <div class="msg-body">
-              <div class="msg-content" :class="{ error: msg.error, streaming: msg.streaming }">
+              <div v-if="editingIndex === idx" class="message-editor">
+                <textarea v-model="editText" rows="4" @keydown.esc.prevent="cancelEdit"></textarea>
+                <div class="message-editor-actions">
+                  <button @click="saveEdit(idx)">保存</button>
+                  <button class="secondary" @click="cancelEdit">取消</button>
+                </div>
+              </div>
+              <div v-else class="msg-content" :class="{ error: msg.error, streaming: msg.streaming }">
                 <span v-html="displayContent(msg.content)"></span><span v-if="msg.streaming" class="stream-cursor">|</span>
               </div>
               <div
@@ -412,6 +484,15 @@ onMounted(async () => {
                 :status-data="msg.statusData"
                 :schema="statusSchema"
               />
+              <div v-if="!msg.streaming && editingIndex !== idx" class="message-actions">
+                <button title="编辑消息" @click="beginEdit(idx)">编辑</button>
+                <button
+                  v-if="msg.role === 'assistant' && idx === messages.length - 1"
+                  title="重新生成此回复"
+                  @click="rerollMessage(idx)"
+                >重 roll</button>
+                <button class="danger" title="删除消息" @click="deleteMessage(idx)">删除</button>
+              </div>
             </div>
           </div>
         </div>
@@ -555,8 +636,21 @@ onMounted(async () => {
 .chat-page {
   display: flex;
   /* Fit within AppLayout's header and vertical content padding. */
-  height: calc(100vh - 56px - var(--space-lg) - var(--space-3xl));
+  height: calc(100vh - 64px - 108px);
   gap: var(--space-lg);
+  position: relative;
+  isolation: isolate;
+}
+
+.chat-page::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -24px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(123, 156, 191, 0.10), transparent 32%),
+    radial-gradient(circle at 82% 20%, rgba(238, 162, 180, 0.07), transparent 28%);
 }
 
 .loading-state, .error-state {
@@ -573,22 +667,25 @@ onMounted(async () => {
   border: 1px solid var(--border-card);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  border-radius: 20px;
 }
 
 .chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px var(--space-lg);
+  padding: 14px var(--space-lg);
   border-bottom: 1px solid var(--border-card);
   flex-shrink: 0;
   gap: var(--space-md);
+  background: linear-gradient(90deg, rgba(123, 156, 191, 0.07), transparent 48%);
 }
 
 .header-name {
   font-size: 16px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--color-misty-blue-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -671,7 +768,8 @@ onMounted(async () => {
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-lg);
+  padding: 28px clamp(16px, 3vw, 40px);
+  background: linear-gradient(180deg, rgba(13, 13, 20, 0.16), transparent 35%);
 }
 
 .chat-messages.empty {
@@ -730,11 +828,53 @@ onMounted(async () => {
   color: #fff;
 }
 
-.msg-body { max-width: 72%; min-width: 0; }
+.msg-body { max-width: 76%; min-width: 0; }
+
+.message-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.message:hover .message-actions { opacity: 1; }
+
+.message-actions button,
+.message-editor-actions button {
+  padding: 3px 8px;
+  border: 1px solid var(--border-card);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.message-actions button:hover,
+.message-editor-actions button:hover { color: var(--text-primary); border-color: var(--color-misty-blue-soft); }
+.message-actions .danger { color: var(--color-crimson-soft); }
+
+.message-editor textarea {
+  width: 100%;
+  min-width: 260px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--color-misty-blue-soft);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.message-editor-actions { display: flex; gap: 6px; margin-top: 6px; }
+.message-editor-actions .secondary { color: var(--text-secondary); }
 
 .msg-content {
-  padding: 10px 16px;
-  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  border-radius: 16px;
   font-size: 14px;
   line-height: 1.65;
   white-space: pre-wrap;
@@ -752,6 +892,7 @@ onMounted(async () => {
   border: 1px solid var(--border-card);
   color: var(--text-primary);
   border-bottom-left-radius: 4px;
+  box-shadow: var(--shadow-sm);
 }
 
 .msg-content.error {
@@ -817,9 +958,10 @@ onMounted(async () => {
   display: flex;
   gap: var(--space-sm);
   align-items: flex-end;
-  padding: var(--space-md) var(--space-lg);
+  padding: 14px var(--space-lg);
   border-top: 1px solid var(--border-card);
   flex-shrink: 0;
+  background: rgba(13, 13, 20, 0.22);
 }
 
 .chat-input-bar textarea {
@@ -869,7 +1011,7 @@ onMounted(async () => {
 
 /* ====== Right Sidebar ====== */
 .chat-sidebar {
-  width: 340px;
+  width: 320px;
   flex-shrink: 0;
   min-height: 0;
   overflow-y: auto;
@@ -884,6 +1026,7 @@ onMounted(async () => {
   border: 1px solid var(--border-card);
   border-radius: var(--radius-md);
   padding: var(--space-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .sb-label {
@@ -895,21 +1038,24 @@ onMounted(async () => {
 
 /* Work Info Card */
 .sb-work-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: var(--space-lg) var(--space-md);
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  column-gap: 14px;
+  align-items: start;
+  text-align: left;
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(123, 156, 191, 0.11), rgba(28, 28, 42, 0.96) 52%);
 }
 
 .sb-cover-wrap {
   position: relative;
-  margin-bottom: var(--space-sm);
+  grid-row: 1 / span 4;
+  margin: 0;
 }
 
 .sb-cover {
-  width: 96px;
-  height: 96px;
+  width: 76px;
+  height: 76px;
   border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--bg-tertiary);
@@ -929,9 +1075,9 @@ onMounted(async () => {
 .fav-heart-btn {
   position: absolute;
   top: -8px;
-  right: -30px;
-  width: 42px;
-  height: 42px;
+  right: -8px;
+  width: 30px;
+  height: 30px;
   border: none;
   background: rgba(0, 0, 0, 0.55);
   border-radius: 50%;
@@ -958,7 +1104,7 @@ onMounted(async () => {
 .sb-name {
   font-size: 16px;
   font-weight: 700;
-  margin: 0 0 6px;
+  margin: 1px 30px 5px 0;
   color: var(--text-primary);
 }
 
@@ -966,7 +1112,7 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--text-tertiary);
   line-height: 1.5;
-  margin: 0 0 var(--space-sm);
+  margin: 0 0 6px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -976,13 +1122,13 @@ onMounted(async () => {
 .sb-meta {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-sm);
   font-size: 11px;
   color: var(--text-tertiary);
 }
 
-.work-rating { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--text-tertiary); }
+.work-rating { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(255, 255, 255, 0.07); font-size: 12px; color: var(--text-tertiary); }
 .rating-stars { display: inline-flex; gap: 1px; }
 .rating-stars button { padding: 0; color: #697089; background: transparent; border: 0; cursor: pointer; font-size: 17px; line-height: 1; }
 .rating-stars button.active, .rating-stars button:hover { color: #f3c65b; }
@@ -999,11 +1145,15 @@ onMounted(async () => {
 .sb-opening {
   background: linear-gradient(135deg, rgba(238, 162, 180, 0.06), rgba(200, 85, 84, 0.04));
   border-color: rgba(238, 162, 180, 0.12);
-  overflow: visible;
+  /* Keep the conversation list useful when a work provides many opening lines. */
+  flex: 0 0 auto;
+  max-height: 190px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .opening-bubble {
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-md);
@@ -1041,7 +1191,7 @@ onMounted(async () => {
   color: var(--text-tertiary);
   white-space: normal;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1091,8 +1241,10 @@ onMounted(async () => {
 
 /* Conversation History */
 .sb-history {
-  flex: 0 1 auto;
-  max-height: min(48vh, 420px);
+  /* History is the primary persistent panel; let it use remaining sidebar height. */
+  flex: 1 1 260px;
+  min-height: 220px;
+  max-height: none;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -1200,7 +1352,7 @@ onMounted(async () => {
 }
 
 @media (max-width: 640px) {
-  .chat-page { height: calc(100vh - 56px - var(--space-md) - var(--space-2xl)); }
+  .chat-page { height: calc(100vh - 56px - 108px); }
   .chat-header { padding: 10px var(--space-md); flex-wrap: wrap; }
   .chat-messages { padding: var(--space-md); }
   .chat-input-bar { padding: var(--space-sm) var(--space-md); }

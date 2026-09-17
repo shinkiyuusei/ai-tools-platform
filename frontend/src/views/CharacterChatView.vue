@@ -6,6 +6,7 @@ import { characterApi } from '../api/character'
 import AppLayout from '../layouts/AppLayout.vue'
 import { parseImmersiveContent, extractStatusSection } from '../utils/messageRenderer'
 import { providerDisplayName } from '../utils/aiProvider'
+import { routeEntityId } from '../utils/routeEntityId'
 import StatusPanel from '../components/StatusPanel.vue'
 import { useChatSession } from '../composables/useChatSession'
 import { usePromptPresets } from '../composables/usePromptPresets'
@@ -13,7 +14,7 @@ import PromptPresetManager from '../components/PromptPresetManager.vue'
 
 const route = useRoute()
 const router = useRouter()
-const characterId = Number(route.params.id)
+const characterId = routeEntityId(route.params.id)
 
 const character = ref(null)
 const loading = ref(true)
@@ -46,6 +47,7 @@ const {
   newConversation,
   deleteConversation,
   saveMessages,
+  replaceMessages,
   appendUserMessage,
   appendAssistantMessage,
   stopStream,
@@ -57,6 +59,9 @@ const {
   reloadListOnNew: true,
 })
 
+const editingIndex = ref(null)
+const editText = ref('')
+
 const loadChatConfig = async () => {
   try {
     const res = await characterApi.getChatConfig(characterId)
@@ -67,14 +72,8 @@ const loadChatConfig = async () => {
   }
 }
 
-const sendMessage = async () => {
-  const text = inputText.value.trim()
-  if (!text || sending.value) return
-
-  await ensureConversation()
-  if (!currentConversationId.value) return
-
-  appendUserMessage(text)
+const generateReply = async ({ replaceOnDone = false } = {}) => {
+  if (sending.value || !currentConversationId.value) return
   sending.value = true
 
   // The card supplies context only; behavior and output rules come from the selected preset.
@@ -83,6 +82,7 @@ const sendMessage = async () => {
     ? [{ role: 'system', content: systemPrompt }, ...messages.value]
     : [...messages.value]
 
+  const assistantMsg = appendAssistantMessage({ streaming: true })
   try {
     const controller = new AbortController()
     activeStream.value = controller
@@ -110,7 +110,7 @@ const sendMessage = async () => {
       signal: controller.signal,
     })
 
-    const assistantMsg = appendAssistantMessage()
+    if (!res.ok) throw new Error('生成请求失败')
 
     await readStream(res, {
       onChunk: (chunk) => {
@@ -118,28 +118,94 @@ const sendMessage = async () => {
         scrollToBottom()
       },
       onDone: () => {},
-      onError: () => {},
+      onError: (message) => { throw new Error(message || '生成失败') },
     })
 
+    assistantMsg.streaming = false
     // Extract status from the completed assistant response
     const statusData = extractStatusSection(assistantMsg.content)
     if (statusData) {
       latestStatus.value = statusData
     }
     try {
-      await saveMessages([
-        { role: 'user', content: text },
-        { role: 'assistant', content: assistantMsg.content },
-      ])
+      if (replaceOnDone) await replaceMessages()
+      else await saveMessages()
       loadConversationList()
     } catch (e) { /* ignore */ }
   } catch (e) {
-    if (e.name === 'AbortError') return
+    if (e.name === 'AbortError') {
+      messages.value = messages.value.filter((message) => message !== assistantMsg)
+      return
+    }
+    assistantMsg.content = `回复生成失败：${e.message || '未知错误'}`
+    assistantMsg.error = true
+    assistantMsg.streaming = false
     console.error('Chat error:', e)
   } finally {
     sending.value = false
     activeStream.value = null
   }
+}
+
+const sendMessage = async () => {
+  const text = inputText.value.trim()
+  if (!text || sending.value) return
+
+  await ensureConversation()
+  if (!currentConversationId.value) return
+  appendUserMessage(text)
+  await generateReply()
+}
+
+const refreshLatestStatus = () => {
+  const lastAssistant = [...messages.value].reverse().find((message) => message.role === 'assistant')
+  latestStatus.value = lastAssistant ? extractStatusSection(lastAssistant.content) : null
+}
+
+const beginEdit = (idx) => {
+  if (sending.value) return
+  editingIndex.value = idx
+  editText.value = messages.value[idx].content
+}
+
+const cancelEdit = () => {
+  editingIndex.value = null
+  editText.value = ''
+}
+
+const saveEdit = async (idx) => {
+  const content = editText.value.trim()
+  if (!content || sending.value) return
+  const previous = messages.value[idx].content
+  messages.value[idx].content = content
+  refreshLatestStatus()
+  cancelEdit()
+  try {
+    await replaceMessages()
+  } catch {
+    messages.value[idx].content = previous
+    refreshLatestStatus()
+  }
+}
+
+const deleteMessage = async (idx) => {
+  if (sending.value || !window.confirm('确定删除这条消息吗？')) return
+  const [removed] = messages.value.splice(idx, 1)
+  refreshLatestStatus()
+  try {
+    await replaceMessages()
+  } catch {
+    messages.value.splice(idx, 0, removed)
+    refreshLatestStatus()
+  }
+}
+
+const rerollMessage = async (idx) => {
+  const message = messages.value[idx]
+  if (sending.value || message?.role !== 'assistant' || idx !== messages.value.length - 1) return
+  messages.value.splice(idx, 1)
+  refreshLatestStatus()
+  await generateReply({ replaceOnDone: true })
 }
 
 const formatTime = (t) => {
@@ -238,12 +304,27 @@ onMounted(async () => {
               <template v-else>{{ character?.name?.slice(0, 2) || 'AI' }}</template>
             </div>
             <div class="msg-body">
-              <div class="msg-content" v-html="formatContent(msg.content)"></div>
+              <div v-if="editingIndex === i" class="message-editor">
+                <textarea v-model="editText" rows="4" @keydown.esc.prevent="cancelEdit"></textarea>
+                <div class="message-editor-actions">
+                  <button @click="saveEdit(i)">保存</button>
+                  <button @click="cancelEdit">取消</button>
+                </div>
+              </div>
+              <div v-else class="msg-content" v-html="formatContent(msg.content)"></div>
               <StatusPanel
                 v-if="msg.role === 'assistant' && !msg.streaming && statusSchema.length"
                 :status-data="extractStatusSection(msg.content)"
                 :schema="statusSchema"
               />
+              <div v-if="!msg.streaming && editingIndex !== i" class="message-actions">
+                <button @click="beginEdit(i)">编辑</button>
+                <button
+                  v-if="msg.role === 'assistant' && i === messages.length - 1"
+                  @click="rerollMessage(i)"
+                >重 roll</button>
+                <button class="danger" @click="deleteMessage(i)">删除</button>
+              </div>
             </div>
           </div>
 
@@ -339,7 +420,7 @@ onMounted(async () => {
 .chat-layout {
   display: flex;
   /* Fit within AppLayout's header and vertical content padding. */
-  height: calc(100vh - 56px - var(--space-lg) - var(--space-3xl));
+  height: calc(100vh - 64px - 108px);
 }
 
 .chat-main {
@@ -347,6 +428,10 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 20px 0 0 20px;
+  overflow: hidden;
 }
 
 /* ---- Sidebar ---- */
@@ -361,7 +446,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  border-radius: 0 20px 20px 0;
 }
 
 .sb-card {
@@ -716,6 +802,45 @@ onMounted(async () => {
   color: #fff;
 }
 
+.message-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.message:hover .message-actions { opacity: 1; }
+
+.message-actions button,
+.message-editor-actions button {
+  padding: 3px 8px;
+  border: 1px solid var(--border-card);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.message-actions .danger { color: var(--color-crimson-soft); }
+
+.message-editor textarea {
+  width: 100%;
+  min-width: 240px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--color-misty-blue-soft);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.message-editor-actions { display: flex; gap: 6px; margin-top: 6px; }
+
 .msg-content {
   padding: 10px 14px;
   border-radius: var(--radius-md);
@@ -818,5 +943,21 @@ onMounted(async () => {
   text-align: center;
   padding: 80px 20px;
   color: var(--text-tertiary);
+}
+
+@media (max-width: 900px) {
+  .chat-sidebar { display: none; }
+  .chat-main { border-radius: 20px; }
+}
+
+@media (max-width: 640px) {
+  .chat-layout { height: calc(100vh - 56px - 108px); }
+  .chat-header { padding: 10px var(--space-md); align-items: flex-start; gap: var(--space-sm); }
+  .header-right { max-width: 54%; flex-wrap: wrap; justify-content: flex-end; }
+  .model-select, .provider-select { max-width: 132px; }
+  .messages { padding: var(--space-md); }
+  .message { max-width: 94%; }
+  .input-bar { padding: var(--space-sm); }
+  .btn-send, .btn-stop { padding: 0 14px; }
 }
 </style>

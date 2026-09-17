@@ -13,6 +13,7 @@ Mirrors the SillyTavern flow:
 * ``POST /admin/ai-model``                     → manually add a model row
 * ``PUT /admin/ai-model/<id>``                 → edit
 * ``DELETE /admin/ai-model/<id>``               → delete
+* ``POST /admin/ai-provider/<id>/models/batch`` → batch state update/delete
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from ...services.ai.provider_repo import (
     replace_provider_models,
 )
 from ...services.ai.secrets import looks_masked, mask_secret
-from ...utils.mysql import execute, query_one
+from ...utils.mysql import execute, query_all, query_one, transaction
 from ...utils.response import success_response
 
 ai_provider_admin_bp = Blueprint("ai_provider_admin", __name__)
@@ -253,6 +254,52 @@ def fetch_models(provider_id: int):
 
 
 # ---- Manual model CRUD ----
+
+@ai_provider_admin_bp.post("/admin/ai-provider/<int:provider_id>/models/batch")
+@jwt_required()
+def batch_update_models(provider_id: int):
+    """Apply one safe action to selected models belonging to one provider."""
+    _require_admin()
+    _load_provider_or_404(provider_id)
+    payload = request.get_json(silent=True) or {}
+    raw_model_ids = payload.get("modelIds")
+    action = payload.get("action")
+
+    if not isinstance(raw_model_ids, list) or not raw_model_ids:
+        raise AppError(ErrorCode.PARAM_INVALID, "modelIds 不能为空")
+    if len(raw_model_ids) > 500:
+        raise AppError(ErrorCode.PARAM_INVALID, "单次最多操作 500 个模型")
+    if action not in {"activate", "deactivate", "delete"}:
+        raise AppError(ErrorCode.PARAM_INVALID, "不支持的批量操作")
+
+    try:
+        model_ids = sorted({int(model_id) for model_id in raw_model_ids})
+    except (TypeError, ValueError) as exc:
+        raise AppError(ErrorCode.PARAM_INVALID, "modelIds 格式错误") from exc
+
+    placeholders = ", ".join(["%s"] * len(model_ids))
+    models = query_all(
+        f"SELECT id FROM t_ai_model WHERE provider_id = %s AND id IN ({placeholders})",
+        (provider_id, *model_ids),
+    )
+    if len(models) != len(model_ids):
+        raise AppError(ErrorCode.PARAM_INVALID, "存在不属于当前供应商的模型")
+
+    with transaction() as cur:
+        if action == "delete":
+            cur.execute(
+                f"DELETE FROM t_ai_model WHERE provider_id = %s AND id IN ({placeholders})",
+                (provider_id, *model_ids),
+            )
+        else:
+            cur.execute(
+                f"UPDATE t_ai_model SET is_active = %s "
+                f"WHERE provider_id = %s AND id IN ({placeholders})",
+                (1 if action == "activate" else 0, provider_id, *model_ids),
+            )
+
+    invalidate_cache()
+    return success_response({"count": len(model_ids), "action": action})
 
 @ai_provider_admin_bp.post("/admin/ai-model")
 @jwt_required()

@@ -457,13 +457,18 @@ onMounted(() => {
 <style scoped>
 .explore-page {
   background: transparent;
+  padding-top: var(--space-sm);
 }
 
 /* --- Top Nav --- */
 .top-nav {
   display: flex;
   gap: 2px;
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-lg);
+  padding: 6px;
+  background: color-mix(in srgb, var(--bg-card) 86%, transparent);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
   flex-wrap: wrap;
 }
 
@@ -485,7 +490,7 @@ onMounted(() => {
   color: var(--text-primary);
   background: var(--bg-card);
   font-weight: 600;
-  border-bottom: 2px solid var(--color-misty-blue-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .top-nav-item--rank {
@@ -505,7 +510,11 @@ onMounted(() => {
 .toolbar-row {
   display: flex;
   gap: var(--space-sm);
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-lg);
+  padding: var(--space-sm);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-card) 78%, transparent);
   align-items: center;
 }
 
@@ -515,7 +524,8 @@ onMounted(() => {
 
 .action-btn {
   padding: 8px 18px;
-  border-radius: var(--radius-sm);
+  min-height: 42px;
+  border-radius: var(--radius-control);
   background: var(--color-misty-blue-deep);
   color: #fff;
   font-size: var(--text-sm);
@@ -544,7 +554,9 @@ onMounted(() => {
 .channel-tabs {
   display: flex;
   gap: var(--space-sm);
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-lg);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .channel-tabs span {
@@ -596,13 +608,13 @@ onMounted(() => {
 .tool-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--space-lg);
+  gap: 20px;
 }
 
 /* --- Card --- */
 .tool-card {
   background: var(--bg-card);
-  border-radius: var(--radius-lg);
+  border-radius: 18px;
   border: 1px solid var(--border-card);
   overflow: hidden;
   transition: all var(--transition-base);
@@ -613,7 +625,7 @@ onMounted(() => {
 }
 
 .tool-card:hover {
-  transform: translateY(-6px);
+  transform: translateY(-5px);
   box-shadow: var(--shadow-xl);
   border-color: var(--border-primary);
 }

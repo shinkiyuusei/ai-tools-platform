@@ -124,6 +124,9 @@ export const conversationApi = {
   addMessages(id, messages) {
     return http.post(`/conversation/${id}/messages`, { messages })
   },
+  replaceMessages(id, messages) {
+    return http.put(`/conversation/${id}/messages`, { messages })
+  },
   list(entityId, entityType = 'work', pageNum = 1, pageSize = 20) {
     return http.get('/conversations', { params: { entityId, entityType, pageNum, pageSize } })
   },

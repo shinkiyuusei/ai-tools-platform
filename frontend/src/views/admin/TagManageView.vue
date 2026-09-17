@@ -5,6 +5,7 @@ import { createTag, deleteTag, getTagList, updateTag } from '../../api/admin'
 import BaseButton from '../../components/base/BaseButton.vue'
 import BaseInput from '../../components/base/BaseInput.vue'
 import AppLayout from '../../layouts/AppLayout.vue'
+import { notifyError } from '../../utils/notify'
 
 const list = ref([])
 const dialogVisible = ref(false)
@@ -39,7 +40,10 @@ const openEdit = (item) => {
 }
 
 const handleSubmit = async () => {
-  if (!form.name) return
+  if (!form.name.trim()) {
+    notifyError('请输入标签名称')
+    return
+  }
   loading.value = true
   try {
     if (isEdit.value) {

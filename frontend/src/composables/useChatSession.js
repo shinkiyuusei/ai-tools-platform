@@ -26,7 +26,7 @@ export function useChatSession({
   entityType = 'work',
   entityId = 0,
   scrollSelector = '.chat-messages',
-  mapMessage = (m) => ({ role: m.role, content: m.content }),
+  mapMessage = (m) => ({ role: m.role, content: m.content, _saved: true }),
   reloadListOnNew = false,
   onReset = null,
 } = {}) {
@@ -168,6 +168,20 @@ export function useChatSession({
     }
   }
 
+  /** Persist the complete transcript after a destructive local change. */
+  async function replaceMessages(msgs = messages.value) {
+    const cid = currentConversationId.value
+    if (!cid) return
+    const transcript = msgs.map((m) => ({ role: m.role, content: m.content }))
+    try {
+      await conversationApi.replaceMessages(cid, transcript)
+      msgs.forEach((m) => (m._saved = true))
+    } catch (e) {
+      console.error('Failed to replace messages:', e)
+      throw e
+    }
+  }
+
   function appendUserMessage(text) {
     messages.value.push({ role: 'user', content: text })
     inputText.value = ''
@@ -218,6 +232,7 @@ export function useChatSession({
     newConversation,
     deleteConversation,
     saveMessages,
+    replaceMessages,
     appendUserMessage,
     appendAssistantMessage,
     cancelStream,

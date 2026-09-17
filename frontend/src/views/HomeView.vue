@@ -41,6 +41,10 @@ const form = reactive({
   statusBar: '',
   openings: [{ label: '', text: '' }],
   aiProvider: 'deepseek',
+  tags: [],
+  content: {},
+  author: '',
+  language: 'zh-Hans',
 })
 
 const EMPTY_WORK_FORM = {
@@ -49,6 +53,7 @@ const EMPTY_WORK_FORM = {
   worldSetting: { worldName: '', eraTech: '', coreConflict: '', toneAtmosphere: '', mainPlot: '', initialState: '' },
   gameRules: '', statusBar: '', openings: [{ label: '', text: '' }],
   aiProvider: 'deepseek',
+  tags: [], content: {}, author: '', language: 'zh-Hans',
 }
 
 const EMPTY_CHARACTER_FORM = {
@@ -121,6 +126,61 @@ function addOpening() {
 function removeOpening(index) {
   if (form.openings.length <= 1) return
   form.openings.splice(index, 1)
+}
+
+function importWorkCard(data) {
+  const source = data.card && typeof data.card === 'object' ? data.card : data
+  const roleConfig = source.roleConfig || source.role_config || {}
+  const protagonist = source.protagonist || roleConfig.protagonist_setting || {}
+  const world = source.worldSetting || roleConfig.worldview_setting || {}
+  const importedOpenings = source.openingStatements || source.openings
+
+  form.name = source.name || ''
+  form.desc = source.desc || ''
+  form.detailedIntro = source.detailedIntro || source.summary || ''
+  form.icon = source.icon || source.cover || ''
+  form.characters = Array.isArray(source.characters)
+    ? source.characters
+    : (Array.isArray(roleConfig.npc_settings) ? roleConfig.npc_settings : [])
+  form.protagonist = {
+    name: protagonist.name || '',
+    description: protagonist.description || protagonist.setting || '',
+    motivation: protagonist.motivation || protagonist.core_motivation || '',
+  }
+  form.worldSetting = {
+    worldName: world.worldName || world.name || '',
+    eraTech: world.eraTech || world.era_background || '',
+    coreConflict: world.coreConflict || world.core_conflict || '',
+    toneAtmosphere: world.toneAtmosphere || world.overall_atmosphere || '',
+    mainPlot: world.mainPlot || roleConfig.main_plot || '',
+    initialState: world.initialState || roleConfig.init_plot_status || '',
+  }
+  form.gameRules = source.gameRules || roleConfig.play_rule || ''
+  form.statusBar = source.statusBar || roleConfig.status_bar || ''
+  form.openings = Array.isArray(importedOpenings) && importedOpenings.length
+    ? importedOpenings.map(item => ({ label: item.label || '', text: item.text || '' }))
+    : (source.opening ? [{ label: '', text: source.opening }] : [{ label: '', text: '' }])
+  form.aiProvider = source.aiProvider || roleConfig.ai_provider || 'deepseek'
+  form.tags = Array.isArray(source.tags) ? source.tags : []
+  form.content = source.content && typeof source.content === 'object' ? source.content : {}
+  form.author = source.author || ''
+  form.language = source.language || 'zh-Hans'
+}
+
+async function handleWorkJsonImport(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  try {
+    const data = JSON.parse(await file.text())
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('invalid JSON')
+    importWorkCard(data)
+    activeSection.value = 'basic'
+    notifySuccess('作品卡 JSON 已导入，请确认后保存')
+  } catch {
+    notifyError('导入失败：请选择有效的作品卡 JSON 文件')
+  }
 }
 
 const sections = [
@@ -210,6 +270,10 @@ async function handleSave() {
       desc: form.desc.trim(),
       detailedIntro: form.detailedIntro.trim(),
       icon: form.icon.trim(),
+      author: form.author.trim(),
+      language: form.language,
+      tags: form.tags,
+      content: form.content,
       characters: form.characters.filter(c => c.name.trim()),
       protagonist: form.protagonist,
       worldSetting: form.worldSetting,
@@ -312,6 +376,10 @@ const charFields = [
       </div>
 
       <div v-if="createMode === 'work'" class="section-nav">
+        <label class="json-import-button">
+          导入 JSON
+          <input type="file" accept="application/json,.json" @change="handleWorkJsonImport" />
+        </label>
         <button
           v-for="sec in sections"
           :key="sec.key"
@@ -534,6 +602,20 @@ const charFields = [
   max-width: 800px;
   margin: 0 auto;
 }
+
+.json-import-button {
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--space-sm);
+  padding: 6px 10px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.json-import-button:hover { border-color: var(--color-misty-blue-soft); color: var(--color-misty-blue-soft); }
+.json-import-button input { display: none; }
 
 .create-header {
   text-align: center;

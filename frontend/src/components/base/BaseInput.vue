@@ -58,7 +58,8 @@ const onInput = (event) => {
   padding: 10px 14px;
   background: var(--bg-input);
   border: 1px solid var(--border-input);
-  border-radius: var(--radius-md);
+  min-height: 42px;
+  border-radius: var(--radius-control);
   color: var(--text-primary);
   font-size: var(--text-sm);
   transition: all var(--transition-fast);
@@ -69,7 +70,8 @@ const onInput = (event) => {
 }
 
 .base-input:hover:not(:disabled) {
-  border-color: var(--text-tertiary);
+  border-color: var(--color-misty-blue-deep);
+  background: var(--bg-elevated);
 }
 
 .base-input:focus {
